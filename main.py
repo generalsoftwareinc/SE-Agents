@@ -1,5 +1,6 @@
 import os
 from agent import Agent
+from tools import DuckDuckGoSearch
 
 
 def main():
@@ -10,7 +11,13 @@ def main():
         print("Error: OPENROUTER_API_KEY environment variable not set")
         return
 
-    agent = Agent(api_key=api_key, model=model)
+    agent = Agent(
+        api_key=os.getenv("OPENROUTER_API_KEY"),
+        model=model,
+        tools=[DuckDuckGoSearch()],
+    )
+
+    print(agent.messages[0]["content"])
 
     print("🤖 Starting agent loop...")
     print("Type 'exit' to end the conversation\n")
@@ -21,16 +28,35 @@ def main():
             break
 
         print("\nAssistant: ", end="")
-        for response_type, content in agent.process_message(user_input):
-            if response_type == "assistant":
-                print(content, end="", flush=True)
-            elif response_type == "tool":
-                # Add spacing before and after non-empty tool results
-                if content.strip():
-                    # Add double newline before tool result and single newline after
-                    print(f"\n\nTool result:\n{content}\n")
-                    # Add a newline before the next assistant response
-                    print("")
+        # Create the generator
+        gen = agent.process_message(user_input)
+
+        # Process responses from the generator
+        try:
+            while True:
+                response = next(gen)
+
+                # Unpack the response
+                response_type, content = response
+
+                if response_type == "assistant":
+                    print(content, end="", flush=True)
+                elif response_type == "tool":
+                    # Add spacing before and after non-empty tool results
+                    if content.strip():
+                        # Format the output based on whether it's an error message or normal result
+                        if content.startswith("Tool call error:") or content.startswith(
+                            "Error:"
+                        ):
+                            print(f"\n\n🔴 {content}\n")
+                        else:
+                            print(f"\n\n🟢 Tool result:\n{content}\n")
+                        # Add a newline before the next assistant response
+                        print("")
+                # We no longer need to handle ask_followup since we removed that tool
+        except StopIteration:
+            # Generator is done
+            pass
 
 
 if __name__ == "__main__":
