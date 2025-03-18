@@ -5,5 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "duckduckgo-search>=7.5.2",
     "openai>=1.66.3",
+    "python-dotenv>=1.0.1",
 ]
