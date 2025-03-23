@@ -1,11 +1,13 @@
 import os
+
 from agent import Agent
-from tools import DuckDuckGoSearch
+from tools import DuckDuckGoSearch, FireCrawlFetchPage
 
 
 def main():
     api_key = os.getenv("OPENROUTER_API_KEY")
     model = os.getenv("OPENROUTER_MODEL")
+    firecrawl_key = os.getenv("FIRECRAWL_API_KEY")
 
     if not api_key:
         print("Error: OPENROUTER_API_KEY environment variable not set")
@@ -14,7 +16,7 @@ def main():
     agent = Agent(
         api_key=os.getenv("OPENROUTER_API_KEY"),
         model=model,
-        tools=[DuckDuckGoSearch()],
+        tools=[DuckDuckGoSearch(), FireCrawlFetchPage(firecrawl_key)],
     )
 
     print(agent.messages[0]["content"])
