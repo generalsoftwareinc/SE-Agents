@@ -1,10 +1,12 @@
 import os
 import re
 import xml.etree.ElementTree as ET
-from typing import Dict, List, Optional, Generator, Union, Tuple
+from typing import Dict, Generator, List, Optional, Tuple, Union
+
 from openai import Client
-from tools import Tool, DuckDuckGoSearch
+
 from system_prompt import system_prompt
+from tools import DuckDuckGoSearch, Tool
 
 
 class Agent:
@@ -69,10 +71,28 @@ class Agent:
         if code_block_match:
             message = code_block_match.group(1)
 
-        tool_match = re.search(r"<([^>]+)>\n(.*?)\n</\1>", message, re.DOTALL)
+        # Skip thinking tags - they're not tool calls
+        if "<thinking>" in message or "</thinking>" in message:
+            # Remove thinking tags and their content for tool parsing (case-insensitive and handles whitespace)
+            message = re.sub(
+                r"<\s*thinking[^>]*>.*?<\s*/\s*thinking\s*>",
+                "",
+                message,
+                flags=re.DOTALL | re.IGNORECASE,
+            )
+
+        tool_match = re.search(r"<([^>]+)>(.*)</\1>", message, re.DOTALL)
         if not tool_match:
             # Check if there's any XML-like content that might indicate a malformed tool call
-            if re.search(r"<([^>]+)>", message) and re.search(r"</([^>]+)>", message):
+            # Exclude thinking tags from this check
+            xml_open = re.search(r"<([^>]+)>", message)
+            xml_close = re.search(r"</([^>]+)>", message)
+            if (
+                xml_open
+                and xml_close
+                and xml_open.group(1) != "thinking"
+                and xml_close.group(1) != "thinking"
+            ):
                 return (
                     None,
                     "Malformed tool call format. Please use the format: <tool_name>\n<param>value</param>\n</tool_name>",
@@ -80,6 +100,10 @@ class Agent:
             return None, None
 
         tool_name = tool_match.group(1)
+
+        # Explicitly skip thinking tags
+        if tool_name == "thinking":
+            return None, None
         tool_content = tool_match.group(2)
 
         # Check if the tool exists

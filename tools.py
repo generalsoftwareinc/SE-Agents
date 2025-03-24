@@ -1,9 +1,9 @@
 import os
 from typing import Dict, List
 
-import requests
 from dotenv import load_dotenv
 from duckduckgo_search import DDGS
+from firecrawl import FirecrawlApp
 
 load_dotenv()
 
@@ -76,7 +76,7 @@ class DuckDuckGoSearch(Tool):
 
 
 class FireCrawlFetchPage(Tool):
-    def __init__(self):
+    def __init__(self, api_key: str):
         super().__init__(
             name="fetch_page",
             description="Fetch the contents of a specific page using Firecrawl",
@@ -88,24 +88,17 @@ class FireCrawlFetchPage(Tool):
                 }
             },
         )
+        self.client = FirecrawlApp(api_key=api_key)
 
     def execute(self, **kwargs) -> str:
         url = kwargs.get("url")
         if not url:
             return "Error: No URL provided"
 
-        api_key = os.getenv("FIRECRAWL_API_KEY")
-        if not api_key:
-            return "Error: Firecrawl API key not found in environment variables"
-
-        headers = {"Authorization": f"Bearer {api_key}"}
         try:
-            response = requests.get(
-                "https://api.firecrawl.dev/scrape",
-                headers=headers,
-                params={"url": url},
-            )
-            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
-            return response.text
-        except requests.exceptions.RequestException as e:
+            # Use the Firecrawl client to fetch the page
+            response = self.client.scrape_url(url=url, params={"formats": ["markdown"]})
+            print(response)
+            return response["markdown"]
+        except Exception as e:
             return f"Error fetching page: {e}"
