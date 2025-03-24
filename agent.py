@@ -163,11 +163,27 @@ class Agent:
             )
 
             full_response = ""
+
+            chunk_counting = 0
+            in_xml = False
             for chunk in response:
                 if chunk.choices[0].delta.content:
                     content = chunk.choices[0].delta.content
+
+                    if "<" in content:
+                        in_xml = True
+
+                    if chunk_counting == 10:
+                        ## check if one of the tool_names is present in the full_response
+                        tool_names = self.tools.keys()
+                        for tool_name in tool_names:
+                            if tool_name in full_response:
+                                pass
+
+                    if not in_xml:
+                        yield ("assistant", content)
+                    chunk_counting += 1
                     full_response += content
-                    yield ("assistant", content)
             # Add a newline after each complete assistant response if not empty
             if full_response.strip():
                 yield ("assistant", "\n")
