@@ -81,10 +81,17 @@ class Agent:
                 flags=re.DOTALL | re.IGNORECASE,
             )
 
-        tool_match = re.search(r"<([^>]+)>(.*)</\1>", message, re.DOTALL)
-        if not tool_match:
-            # Check if there's any XML-like content that might indicate a malformed tool call
-            # Exclude thinking tags from this check
+        valid_tool_patterns = []
+        for tool_name in self.tools.keys():
+            pattern = f"<{tool_name}>(.*?)</{tool_name}>"
+            valid_tool_patterns.append((tool_name, pattern))
+        
+        for tool_name, pattern in valid_tool_patterns:
+            tool_match = re.search(pattern, message, re.DOTALL)
+            if tool_match:
+                tool_content = tool_match.group(1)
+                break
+        else:
             xml_open = re.search(r"<([^>]+)>", message)
             xml_close = re.search(r"</([^>]+)>", message)
             if (
@@ -92,26 +99,13 @@ class Agent:
                 and xml_close
                 and xml_open.group(1) != "thinking"
                 and xml_close.group(1) != "thinking"
+                and any(tool_name.startswith(xml_open.group(1)) or xml_open.group(1).startswith(tool_name) for tool_name in self.tools.keys())
             ):
                 return (
                     None,
                     "Malformed tool call format. Please use the format: <tool_name>\n<param>value</param>\n</tool_name>",
                 )
             return None, None
-
-        tool_name = tool_match.group(1)
-
-        # Explicitly skip thinking tags
-        if tool_name == "thinking":
-            return None, None
-        tool_content = tool_match.group(2)
-
-        # Check if the tool exists
-        if tool_name not in self.tools:
-            return (
-                None,
-                f"Unknown tool: '{tool_name}'. Available tools: {', '.join(self.tools.keys())}",
-            )
 
         # Parse parameters
         params = {}
