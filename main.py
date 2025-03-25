@@ -4,7 +4,7 @@ from agent import Agent
 from tools import DuckDuckGoSearch, FireCrawlFetchPage
 
 
-def main():
+def main(stream: bool = False):
     api_key = os.getenv("OPENROUTER_API_KEY")
     model = os.getenv("OPENROUTER_MODEL")
     firecrawl_key = os.getenv("FIRECRAWL_API_KEY")
@@ -19,7 +19,7 @@ def main():
         tools=[DuckDuckGoSearch(), FireCrawlFetchPage(firecrawl_key)],
     )
 
-    print(agent.messages[0]["content"])
+    # print(agent.messages[0]["content"])
 
     print("🤖 Starting agent loop...")
     print("Type 'exit' to end the conversation\n")
@@ -31,7 +31,7 @@ def main():
 
         print("\nAssistant: ", end="")
         # Create the generator
-        gen = agent.process_message(user_input)
+        gen = agent.process_message(user_input,stream=stream)
 
         # Process responses from the generator
         try:
@@ -62,4 +62,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(stream=True  )

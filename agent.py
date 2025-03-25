@@ -147,7 +147,9 @@ class Agent:
         except Exception as e:
             return f"Tool error: {str(e)}", False
 
-    def process_message(self, user_input: str):
+    def process_message(
+        self, user_input: str, stream: bool = False
+    ) -> Generator[Tuple[str, str], None, None]:
         """Process a user message and yield responses (assistant messages and tool results).
 
         This method handles the conversation loop, including tool calls and user interactions.
@@ -159,34 +161,58 @@ class Agent:
 
         while continue_conversation:
             response = self.client.chat.completions.create(
-                model=self.model, messages=self.messages, stream=True
+                model=self.model, messages=self.messages, stream=stream
             )
 
             full_response = ""
 
-            chunk_counting = 0
-            in_xml = False
-            for chunk in response:
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-
-                    if "<" in content:
-                        in_xml = True
-
-                    if chunk_counting == 10:
-                        ## check if one of the tool_names is present in the full_response
-                        tool_names = self.tools.keys()
-                        for tool_name in tool_names:
-                            if tool_name in full_response:
-                                pass
-
-                    if not in_xml:
+            if stream:
+                chunk_counting = 0
+                in_xml = False
+                tool_detected = False
+                
+                for chunk in response:
+                    if chunk.choices[0].delta.content:
+                        content = chunk.choices[0].delta.content
+                        full_response += content
+                        
+                        if "<" in content and not in_xml:
+                            in_xml = True
+                            chunk_counting = 1
+                        
+                        elif in_xml:
+                            if chunk_counting < 10:
+                                chunk_counting += 1
+                            elif chunk_counting == 10:
+                                for tool_name in self.tools.keys():
+                                    if f"<{tool_name}" in full_response:
+                                        tool_detected = True
+                                        break
+                                if not tool_detected:
+                                    in_xml = False
+                        # if not in_xml:        # Uncomment to avoid showing the XMLs in the stream.
                         yield ("assistant", content)
-                    chunk_counting += 1
-                    full_response += content
-            # Add a newline after each complete assistant response if not empty
-            if full_response.strip():
-                yield ("assistant", "\n")
+                
+                if tool_detected:
+                    tool_call, _ = self._parse_tool_call(full_response)
+                    if tool_call:
+                        tool_name = list(tool_call.keys())[0]
+                        tool_params = tool_call[tool_name]
+                        tool_result, _ = self._execute_tool(tool_name, tool_params)
+                        yield ("tool", tool_result)
+                        self.messages.append(
+                            {"role": "user", "content": f"Tool result: {tool_result}"}
+                        )
+                
+                # Add a newline after each complete assistant response if not empty
+                if full_response.strip() and not tool_detected:
+                    yield ("assistant", "\n")
+            else:
+                # Non-streaming response
+                full_response = response.choices[0].message.content
+                if full_response: # Check added in case response is empty
+                    yield ("assistant", full_response)
+
 
             self.messages.append({"role": "assistant", "content": full_response})
 
