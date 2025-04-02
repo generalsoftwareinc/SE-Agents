@@ -85,7 +85,7 @@ class Agent:
         for tool_name in self.tools.keys():
             pattern = f"<{tool_name}>(.*?)</{tool_name}>"
             valid_tool_patterns.append((tool_name, pattern))
-        
+
         for tool_name, pattern in valid_tool_patterns:
             tool_match = re.search(pattern, message, re.DOTALL)
             if tool_match:
@@ -99,7 +99,11 @@ class Agent:
                 and xml_close
                 and xml_open.group(1) != "thinking"
                 and xml_close.group(1) != "thinking"
-                and any(tool_name.startswith(xml_open.group(1)) or xml_open.group(1).startswith(tool_name) for tool_name in self.tools.keys())
+                and any(
+                    tool_name.startswith(xml_open.group(1))
+                    or xml_open.group(1).startswith(tool_name)
+                    for tool_name in self.tools.keys()
+                )
             ):
                 return (
                     None,
@@ -107,15 +111,29 @@ class Agent:
                 )
             return None, None
 
-        # Parse parameters
         params = {}
         try:
-            root = ET.fromstring(f"<root>{tool_content}</root>")
+            temp_root_str = f"<root>{tool_content}</root>"
+            root = ET.fromstring(temp_root_str)
+
+            tool = self.tools.get(tool_name)
+            if not tool:
+                return (
+                    None,
+                    f"Internal error: Tool '{tool_name}' not found after match.",
+                )
+
+            expected_params = set(tool.parameters.keys())
+            found_tags = {child.tag for child in root}
+
+            if not found_tags.issubset(expected_params):
+                return None, None
+
             for child in root:
                 params[child.tag] = child.text.strip() if child.text else ""
+
         except ET.ParseError as e:
-            error_msg = f"Error parsing tool parameters: {str(e)}. Please use valid XML format for parameters."
-            return None, error_msg
+            return None, None
 
         return {tool_name: params}, None
 
@@ -159,84 +177,46 @@ class Agent:
             )
 
             full_response = ""
-
             if stream:
-                chunk_counting = 0
-                in_xml = False
-                tool_detected = False
-                
                 for chunk in response:
                     if chunk.choices[0].delta.content:
                         content = chunk.choices[0].delta.content
                         full_response += content
-                        
-                        if "<" in content and not in_xml:
-                            in_xml = True
-                            chunk_counting = 1
-                        
-                        elif in_xml:
-                            if chunk_counting < 10:
-                                chunk_counting += 1
-                            elif chunk_counting == 10:
-                                for tool_name in self.tools.keys():
-                                    if f"<{tool_name}" in full_response:
-                                        tool_detected = True
-                                        break
-                                if not tool_detected:
-                                    in_xml = False
-                        # if not in_xml:        # Uncomment to avoid showing the XMLs in the stream.
                         yield ("assistant", content)
-                
-                if tool_detected:
-                    tool_call, _ = self._parse_tool_call(full_response)
-                    if tool_call:
-                        tool_name = list(tool_call.keys())[0]
-                        tool_params = tool_call[tool_name]
-                        tool_result, _ = self._execute_tool(tool_name, tool_params)
-                        yield ("tool", tool_result)
-                        self.messages.append(
-                            {"role": "user", "content": f"Tool result: {tool_result}"}
-                        )
-                
-                # Add a newline after each complete assistant response if not empty
-                if full_response.strip() and not tool_detected:
+                if full_response.strip() and not re.search(
+                    r"</[^>]+>\s*$", full_response
+                ):
                     yield ("assistant", "\n")
             else:
-                # Non-streaming response
                 full_response = response.choices[0].message.content
-                if full_response: # Check added in case response is empty
+                if full_response:
                     yield ("assistant", full_response)
+                    if not re.search(r"</[^>]+>\s*$", full_response):
+                        yield ("assistant", "\n")
 
+            if full_response and full_response.strip():
+                self.messages.append({"role": "assistant", "content": full_response})
+            else:
+                continue_conversation = False
+                continue
 
-            self.messages.append({"role": "assistant", "content": full_response})
-
-            # Check for tool calls
             tool_call, error_message = self._parse_tool_call(full_response)
 
             if error_message:
-                # Provide feedback about the tool call format error
                 feedback = f"Tool call error: {error_message}\n\nPlease try again with the correct format."
                 yield ("tool", feedback)
-
-                # Add the error feedback to the conversation history
                 self.messages.append({"role": "user", "content": feedback})
-                # Continue the conversation to allow the AI to try again
-                continue
+                continue_conversation = True
 
             elif tool_call:
                 tool_name = list(tool_call.keys())[0]
                 tool_params = tool_call[tool_name]
 
-                # Execute the tool
                 tool_result, success = self._execute_tool(tool_name, tool_params)
+
                 yield ("tool", tool_result)
 
-                # Add the tool result to the conversation history
-                self.messages.append(
-                    {"role": "user", "content": f"Tool result: {tool_result}"}
-                )
-
-                # If there was a parameter validation error, provide a hint about the correct format
+                history_message = f"Tool result: {tool_result}"
                 if not success:
                     tool = self.tools.get(tool_name)
                     if tool:
@@ -246,8 +226,12 @@ class Agent:
                                 for name, config in tool.parameters.items()
                             ]
                         )
-                        hint = f"Please try again with the correct parameters for {tool_name}:\n{param_info}"
-                        self.messages[-1]["content"] += f"\n\n{hint}"
+                        hint = f"\nPlease try again with the correct parameters for {tool_name}:\n{param_info}"
+                        history_message += f"\n\n{hint}"
+
+                self.messages.append({"role": "user", "content": history_message})
+
+                continue_conversation = True
+
             else:
-                # If no tool call, assume the task is complete and end the conversation
                 continue_conversation = False
