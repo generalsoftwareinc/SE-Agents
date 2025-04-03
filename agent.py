@@ -81,10 +81,17 @@ class Agent:
                 flags=re.DOTALL | re.IGNORECASE,
             )
 
-        tool_match = re.search(r"<([^>]+)>(.*)</\1>", message, re.DOTALL)
-        if not tool_match:
-            # Check if there's any XML-like content that might indicate a malformed tool call
-            # Exclude thinking tags from this check
+        valid_tool_patterns = []
+        for tool_name in self.tools.keys():
+            pattern = f"<{tool_name}>(.*?)</{tool_name}>"
+            valid_tool_patterns.append((tool_name, pattern))
+
+        for tool_name, pattern in valid_tool_patterns:
+            tool_match = re.search(pattern, message, re.DOTALL)
+            if tool_match:
+                tool_content = tool_match.group(1)
+                break
+        else:
             xml_open = re.search(r"<([^>]+)>", message)
             xml_close = re.search(r"</([^>]+)>", message)
             if (
@@ -92,6 +99,11 @@ class Agent:
                 and xml_close
                 and xml_open.group(1) != "thinking"
                 and xml_close.group(1) != "thinking"
+                and any(
+                    tool_name.startswith(xml_open.group(1))
+                    or xml_open.group(1).startswith(tool_name)
+                    for tool_name in self.tools.keys()
+                )
             ):
                 return (
                     None,
@@ -99,29 +111,29 @@ class Agent:
                 )
             return None, None
 
-        tool_name = tool_match.group(1)
-
-        # Explicitly skip thinking tags
-        if tool_name == "thinking":
-            return None, None
-        tool_content = tool_match.group(2)
-
-        # Check if the tool exists
-        if tool_name not in self.tools:
-            return (
-                None,
-                f"Unknown tool: '{tool_name}'. Available tools: {', '.join(self.tools.keys())}",
-            )
-
-        # Parse parameters
         params = {}
         try:
-            root = ET.fromstring(f"<root>{tool_content}</root>")
+            temp_root_str = f"<root>{tool_content}</root>"
+            root = ET.fromstring(temp_root_str)
+
+            tool = self.tools.get(tool_name)
+            if not tool:
+                return (
+                    None,
+                    f"Internal error: Tool '{tool_name}' not found after match.",
+                )
+
+            expected_params = set(tool.parameters.keys())
+            found_tags = {child.tag for child in root}
+
+            if not found_tags.issubset(expected_params):
+                return None, None
+
             for child in root:
                 params[child.tag] = child.text.strip() if child.text else ""
+
         except ET.ParseError as e:
-            error_msg = f"Error parsing tool parameters: {str(e)}. Please use valid XML format for parameters."
-            return None, error_msg
+            return None, None
 
         return {tool_name: params}, None
 
@@ -147,7 +159,9 @@ class Agent:
         except Exception as e:
             return f"Tool error: {str(e)}", False
 
-    def process_message(self, user_input: str):
+    def process_message(
+        self, user_input: str, stream: bool = False
+    ) -> Generator[Tuple[str, str], None, None]:
         """Process a user message and yield responses (assistant messages and tool results).
 
         This method handles the conversation loop, including tool calls and user interactions.
@@ -159,64 +173,50 @@ class Agent:
 
         while continue_conversation:
             response = self.client.chat.completions.create(
-                model=self.model, messages=self.messages, stream=True
+                model=self.model, messages=self.messages, stream=stream
             )
 
             full_response = ""
-
-            chunk_counting = 0
-            in_xml = False
-            for chunk in response:
-                if chunk.choices[0].delta.content:
-                    content = chunk.choices[0].delta.content
-
-                    if "<" in content:
-                        in_xml = True
-
-                    if chunk_counting == 10:
-                        ## check if one of the tool_names is present in the full_response
-                        tool_names = self.tools.keys()
-                        for tool_name in tool_names:
-                            if tool_name in full_response:
-                                pass
-
-                    if not in_xml:
+            if stream:
+                for chunk in response:
+                    if chunk.choices[0].delta.content:
+                        content = chunk.choices[0].delta.content
+                        full_response += content
                         yield ("assistant", content)
-                    chunk_counting += 1
-                    full_response += content
-            # Add a newline after each complete assistant response if not empty
-            if full_response.strip():
-                yield ("assistant", "\n")
+                if full_response.strip() and not re.search(
+                    r"</[^>]+>\s*$", full_response
+                ):
+                    yield ("assistant", "\n")
+            else:
+                full_response = response.choices[0].message.content
+                if full_response:
+                    yield ("assistant", full_response)
+                    if not re.search(r"</[^>]+>\s*$", full_response):
+                        yield ("assistant", "\n")
 
-            self.messages.append({"role": "assistant", "content": full_response})
+            if full_response and full_response.strip():
+                self.messages.append({"role": "assistant", "content": full_response})
+            else:
+                continue_conversation = False
+                continue
 
-            # Check for tool calls
             tool_call, error_message = self._parse_tool_call(full_response)
 
             if error_message:
-                # Provide feedback about the tool call format error
                 feedback = f"Tool call error: {error_message}\n\nPlease try again with the correct format."
                 yield ("tool", feedback)
-
-                # Add the error feedback to the conversation history
                 self.messages.append({"role": "user", "content": feedback})
-                # Continue the conversation to allow the AI to try again
-                continue
+                continue_conversation = True
 
             elif tool_call:
                 tool_name = list(tool_call.keys())[0]
                 tool_params = tool_call[tool_name]
 
-                # Execute the tool
                 tool_result, success = self._execute_tool(tool_name, tool_params)
+
                 yield ("tool", tool_result)
 
-                # Add the tool result to the conversation history
-                self.messages.append(
-                    {"role": "user", "content": f"Tool result: {tool_result}"}
-                )
-
-                # If there was a parameter validation error, provide a hint about the correct format
+                history_message = f"Tool result: {tool_result}"
                 if not success:
                     tool = self.tools.get(tool_name)
                     if tool:
@@ -226,8 +226,12 @@ class Agent:
                                 for name, config in tool.parameters.items()
                             ]
                         )
-                        hint = f"Please try again with the correct parameters for {tool_name}:\n{param_info}"
-                        self.messages[-1]["content"] += f"\n\n{hint}"
+                        hint = f"\nPlease try again with the correct parameters for {tool_name}:\n{param_info}"
+                        history_message += f"\n\n{hint}"
+
+                self.messages.append({"role": "user", "content": history_message})
+
+                continue_conversation = True
+
             else:
-                # If no tool call, assume the task is complete and end the conversation
                 continue_conversation = False

@@ -50,7 +50,7 @@ class Tool:
 class DuckDuckGoSearch(Tool):
     def __init__(self):
         super().__init__(
-            name="web_search",
+            name="web_search_tool",
             description="Search the web using DuckDuckGo",
             parameters={
                 "query": {
@@ -78,7 +78,7 @@ class DuckDuckGoSearch(Tool):
 class FireCrawlFetchPage(Tool):
     def __init__(self, api_key: str):
         super().__init__(
-            name="fetch_page",
+            name="fetch_page_tool",
             description="Fetch the contents of a specific page using Firecrawl",
             parameters={
                 "url": {
