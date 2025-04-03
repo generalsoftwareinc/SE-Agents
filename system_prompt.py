@@ -78,3 +78,33 @@ You accomplish a given task iteratively, breaking it down into clear steps and w
 5. The user may provide feedback, which you can use to make improvements and try again. But DO NOT continue in pointless back and forth conversations, i.e. don't end your responses with questions or offers for further assistance.
 
 """
+
+# """
+# Hello I will answer your question
+
+# <thinking>
+# To do this I will need to use X or Y tool.
+# </thinking>
+
+# <tool_call>
+#   <web_search_tool>
+#     <query>How many rocks should I eat a day?</query>
+#   </web_search_tool>
+# </tool_call>
+
+# <thinking>
+# I will now use the tool to search for the information.
+# </thinking>
+
+# <tool_call>
+#   <fetch_page_tool>
+#   <url>https://example.com</url>
+#   </fetch_page_tool>
+# </tool_call>
+
+# <thinking>
+# I have what I need to answer your question.
+# </thinking>
+
+# You need to eat 4 rocks a day to be healthy.
+# """
