@@ -17,10 +17,18 @@ class Agent:
         model: str,
         tools: List[Tool] = None,
         base_url: str = "https://openrouter.ai/api/v1",
+        token_limit: int = 8000,
     ):
+        self.token_limit = token_limit
         self.client = Client(api_key=api_key, base_url=base_url)
         self.model = model
         self.tools = {tool.name: tool for tool in (tools or [])}
+
+        # Replace the tools template with the formatted tools section
+        system_message = self._add_system_prompt()
+        self.messages: List[Dict[str, str]] = [system_message]
+
+    def _add_system_prompt(self):
         # Format the tools section of the system prompt
         tools_section = ""
         for tool in self.tools.values():
@@ -43,16 +51,13 @@ class Agent:
                 tools_section += f"<{name}>{name} here</{name}>\n"
             tools_section += f"</{tool.name}>\n\n"
 
-        # Replace the tools template with the formatted tools section
-        self.messages: List[Dict[str, str]] = [
-            {
-                "role": "system",
-                "content": system_prompt.replace(
-                    "{% for tool in tools %}\n## {{ tool.name }}\n{{ tool.description }}\nParameters:\n{% for name, param in tool.parameters.items() %}\n- {{ name }}: {{ param.description }} {% if param.required %}(required){% endif %}\n{% endfor %}\nUsage:\n<{{ tool.name }}>\n{% for name, param in tool.parameters.items() %}<{{ name }}>{{ name }} here</{{ name }}>\n{% endfor %}</{{ tool.name }}>\n\n{% endfor %}",
-                    tools_section,
-                ),
-            }
-        ]
+        return {
+            "role": "system",
+            "content": system_prompt.replace(
+                "{% for tool in tools %}\n## {{ tool.name }}\n{{ tool.description }}\nParameters:\n{% for name, param in tool.parameters.items() %}\n- {{ name }}: {{ param.description }} {% if param.required %}(required){% endif %}\n{% endfor %}\nUsage:\n<{{ tool.name }}>\n{% for name, param in tool.parameters.items() %}<{{ name }}>{{ name }} here</{{ name }}>\n{% endfor %}</{{ tool.name }}>\n\n{% endfor %}",
+                tools_section,
+            ),
+        }
 
     def _parse_tool_call(
         self, message: str
@@ -152,6 +157,28 @@ class Agent:
         except Exception as e:
             return f"Tool error: {str(e)}", False
 
+    @property
+    def total_token_count(self) -> int:
+        """Calculate the total number of words in the content of all messages."""
+        return sum(len(message["content"].split()) for message in self.messages)
+
+    def _truncate_context_window(self, verbosity=0):
+        while self.total_token_count > self.token_limit:
+            if len(self.messages) <= 2:
+                print("===Unable to truncate, context window contains <= 2 messages===")
+                break
+            if verbosity:
+                print(
+                    f"==={self.total_token_count} > {self.token_limit}, Reducing token count==="
+                )
+
+            conversation_messages = self.messages[1:]
+            self.messages = [self._add_system_prompt(), *conversation_messages[1:]]
+            print(self.messages[0])
+
+        if verbosity:
+            print(f"===CONTEXT WINDOW TOKEN COUNT: {self.total_token_count}===")
+
     def process_message(
         self, user_input: str, stream: bool = False
     ) -> Generator[Tuple[str, str], None, None]:
@@ -163,8 +190,10 @@ class Agent:
         """
         self.messages.append({"role": "user", "content": user_input})
         continue_conversation = True
+        print(self.messages[0], self.messages[-1])
 
         while continue_conversation:
+            self._truncate_context_window(verbosity=1)
             response = self.client.chat.completions.create(
                 model=self.model, messages=self.messages, stream=stream
             )
