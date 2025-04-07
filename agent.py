@@ -2,6 +2,7 @@ import os
 import re
 import xml.etree.ElementTree as ET
 from typing import Dict, Generator, List, Optional, Tuple, Union
+from schemas import AssistantMessage, ToolMessage
 
 from openai import Client
 
@@ -182,17 +183,17 @@ class Agent:
                     if chunk.choices[0].delta.content:
                         content = chunk.choices[0].delta.content
                         full_response += content
-                        yield ("assistant", content)
+                        yield AssistantMessage(role="assistant", content=content)
                 if full_response.strip() and not re.search(
                     r"</[^>]+>\s*$", full_response
                 ):
-                    yield ("assistant", "\n")
+                    yield AssistantMessage(role="assistant", content="\n")
             else:
                 full_response = response.choices[0].message.content
                 if full_response:
-                    yield ("assistant", full_response)
+                    yield AssistantMessage(role="assistant", content=full_response)
                     if not re.search(r"</[^>]+>\s*$", full_response):
-                        yield ("assistant", "\n")
+                        yield AssistantMessage(role="assistant", content="\n")
 
             if full_response and full_response.strip():
                 self.messages.append({"role": "assistant", "content": full_response})
@@ -204,7 +205,7 @@ class Agent:
 
             if error_message:
                 feedback = f"Tool call error: {error_message}\n\nPlease try again with the correct format."
-                yield ("tool", feedback)
+                yield ToolMessage(role="tool", content=feedback)
                 self.messages.append({"role": "user", "content": feedback})
                 continue_conversation = True
 
@@ -214,7 +215,7 @@ class Agent:
 
                 tool_result, success = self._execute_tool(tool_name, tool_params)
 
-                yield ("tool", tool_result)
+                yield ToolMessage(role="tool", content=tool_result)
 
                 history_message = f"Tool result: {tool_result}"
                 if not success:
