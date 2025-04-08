@@ -98,7 +98,18 @@ class FireCrawlFetchPage(Tool):
         try:
             # Use the Firecrawl client to fetch the page
             response = self.client.scrape_url(url=url, params={"formats": ["markdown"]})
-            print(response)
-            return response["markdown"]
+            markdown_content = response["markdown"]
+
+            # Count words in the markdown content
+            words = markdown_content.split()
+            word_count = len(words)
+
+            if word_count > 32000:
+                # Extract first 16k words and last 16k words
+                first_16k = " ".join(words[:16000])
+                last_16k = " ".join(words[-16000:])
+                return f"{first_16k}\n.......\n{last_16k}"
+            else:
+                return markdown_content
         except Exception as e:
             return f"Error fetching page: {e}"

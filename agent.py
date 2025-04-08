@@ -2,10 +2,10 @@ import os
 import re
 import xml.etree.ElementTree as ET
 from typing import Dict, Generator, List, Optional, Tuple, Union
-from schemas import AssistantMessage, ToolMessage
 
 from openai import Client
 
+from schemas import AssistantMessage, ToolMessage
 from system_prompt import system_prompt
 from tools import DuckDuckGoSearch, Tool
 
@@ -122,8 +122,11 @@ class Agent:
                 child.tag: child.text.strip() if child.text else "" for child in root
             }
 
-        except ET.ParseError:
-            return None, "Malformed XML in tool call. Please check the format."
+        except ET.ParseError as e:
+            return (
+                None,
+                f"Malformed XML in tool call: {str(e)} \n Please check the format.",
+            )
 
         return {tool_name: params}, None
 
@@ -206,7 +209,7 @@ class Agent:
 
                 yield ToolMessage(role="tool", content=tool_result)
 
-                history_message = f"Tool result: {tool_result}"
+                history_message = f"<tool_result>\n{tool_result}\n</tool_result>"
                 if not success:
                     tool = self.tools.get(tool_name)
                     if tool:
