@@ -9,6 +9,7 @@ from schemas import AssistantMessage, ToolMessage
 from system_prompt import system_prompt
 from tools import DuckDuckGoSearch, Tool
 
+TOKEN_LIMIT = 80000
 
 class Agent:
     def __init__(
@@ -17,7 +18,7 @@ class Agent:
         model: str,
         tools: List[Tool] = None,
         base_url: str = "https://openrouter.ai/api/v1",
-        token_limit: int = 8000,
+        token_limit: int = TOKEN_LIMIT,
     ):
         self.token_limit = token_limit
         self.client = Client(api_key=api_key, base_url=base_url)
@@ -164,17 +165,64 @@ class Agent:
 
     def _truncate_context_window(self, verbosity=0):
         while self.total_token_count > self.token_limit:
-            if len(self.messages) <= 2:
-                print("===Unable to truncate, context window contains <= 2 messages===")
-                break
             if verbosity:
                 print(
-                    f"==={self.total_token_count} > {self.token_limit}, Reducing token count==="
+                    f"==={self.total_token_count} > {self.token_limit}, Reducing token count by truncating the longest messages==="
                 )
 
-            conversation_messages = self.messages[1:]
-            self.messages = [self._add_system_prompt(), *conversation_messages[1:]]
-            print(self.messages[0])
+            tpm = [len(msg["content"].split()) for msg in self.messages]
+            median_token_count = sorted(tpm)[len(tpm) // 2]
+
+            def truncate_message_content(content: str) -> str:
+
+                tokens = content.split()
+
+                if len(tokens) <= median_token_count:
+                    return content
+
+                percent = 20
+                first_x_percent = tokens[: max(1, len(tokens) // percent)]
+                last_x_percent = tokens[-max(1, len(tokens) // percent) :]
+                return " ".join(first_x_percent + ["..."] + last_x_percent)
+
+            self.messages = [
+                {
+                    **msg,
+                    "content": truncate_message_content(msg["content"]),
+                }
+                for msg in self.messages
+            ]
+
+            if self.total_token_count > self.token_limit:
+                if len(self.messages) <= 2:
+                    print(
+                        "===Unable to truncate, context window contains <= 2 messages==="
+                    )
+                    break
+                if verbosity:
+                    print(
+                        f"==={self.total_token_count} > {self.token_limit}, Reducing token count by eliminating older messages==="
+                    )
+
+                conversation_messages = self.messages[1:]
+                user_messages = [msg for msg in self.messages if msg.role == "user"]
+                latest_user_message = user_messages[-1]
+                conversation_messages = [
+                    msg
+                    for msg in self.conversation_messages
+                    if msg.role != "user" or msg == latest_user_message
+                ]
+
+                if conversation_messages[0]["role"] != "user":
+                    conversation_messages.pop(0)
+                else:
+                    conversation_messages.pop(1)
+
+                self.messages = [
+                    self._add_system_prompt(),
+                    *conversation_messages,
+                ]
+                print(self.messages[0])
 
         if verbosity:
             print(f"===CONTEXT WINDOW TOKEN COUNT: {self.total_token_count}===")
