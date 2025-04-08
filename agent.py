@@ -5,6 +5,7 @@ from typing import Dict, Generator, List, Optional, Tuple, Union
 
 from openai import Client
 
+from schemas import AssistantMessage, ToolMessage
 from system_prompt import system_prompt
 from tools import DuckDuckGoSearch, Tool
 
@@ -81,59 +82,51 @@ class Agent:
                 flags=re.DOTALL | re.IGNORECASE,
             )
 
-        valid_tool_patterns = []
-        for tool_name in self.tools.keys():
-            pattern = f"<{tool_name}>(.*?)</{tool_name}>"
-            valid_tool_patterns.append((tool_name, pattern))
-
-        for tool_name, pattern in valid_tool_patterns:
-            tool_match = re.search(pattern, message, re.DOTALL)
-            if tool_match:
-                tool_content = tool_match.group(1)
-                break
-        else:
-            xml_open = re.search(r"<([^>]+)>", message)
-            xml_close = re.search(r"</([^>]+)>", message)
-            if (
-                xml_open
-                and xml_close
-                and xml_open.group(1) != "thinking"
-                and xml_close.group(1) != "thinking"
-                and any(
-                    tool_name.startswith(xml_open.group(1))
-                    or xml_open.group(1).startswith(tool_name)
-                    for tool_name in self.tools.keys()
-                )
-            ):
+        tool_call_match = re.search(r"<tool_call>(.*?)</tool_call>", message, re.DOTALL)
+        if tool_call_match:
+            tool_call_content = tool_call_match.group(1)
+            tool_name_match = re.search(
+                r"<([^>]+)>(.*?)</\1>", tool_call_content, re.DOTALL
+            )
+            if tool_name_match:
+                tool_name = tool_name_match.group(1)
+                tool_content = tool_name_match.group(2)
+            else:
                 return (
                     None,
-                    "Malformed tool call format. Please use the format: <tool_name>\n<param>value</param>\n</tool_name>",
+                    "Malformed tool call format. Please use the format: <tool_call><tool_name>...</tool_name></tool_call>",
                 )
+        else:
             return None, None
+
+        # Use the extracted tool_name and tool_content
+        tool = self.tools.get(tool_name)
+        if not tool:
+            return None, f"Unknown tool: {tool_name}"
 
         params = {}
         try:
             temp_root_str = f"<root>{tool_content}</root>"
             root = ET.fromstring(temp_root_str)
 
-            tool = self.tools.get(tool_name)
-            if not tool:
-                return (
-                    None,
-                    f"Internal error: Tool '{tool_name}' not found after match.",
-                )
-
             expected_params = set(tool.parameters.keys())
             found_tags = {child.tag for child in root}
 
             if not found_tags.issubset(expected_params):
-                return None, None
+                return (
+                    None,
+                    f"Unexpected parameters in tool call for {tool_name}. Expected: {', '.join(expected_params)}",
+                )
 
-            for child in root:
-                params[child.tag] = child.text.strip() if child.text else ""
+            params = {
+                child.tag: child.text.strip() if child.text else "" for child in root
+            }
 
         except ET.ParseError as e:
-            return None, None
+            return (
+                None,
+                f"Malformed XML in tool call: {str(e)} \n Please check the format.",
+            )
 
         return {tool_name: params}, None
 
@@ -182,17 +175,17 @@ class Agent:
                     if chunk.choices[0].delta.content:
                         content = chunk.choices[0].delta.content
                         full_response += content
-                        yield ("assistant", content)
+                        yield AssistantMessage(role="assistant", content=content)
                 if full_response.strip() and not re.search(
                     r"</[^>]+>\s*$", full_response
                 ):
-                    yield ("assistant", "\n")
+                    yield AssistantMessage(role="assistant", content="\n")
             else:
                 full_response = response.choices[0].message.content
                 if full_response:
-                    yield ("assistant", full_response)
+                    yield AssistantMessage(role="assistant", content=full_response)
                     if not re.search(r"</[^>]+>\s*$", full_response):
-                        yield ("assistant", "\n")
+                        yield AssistantMessage(role="assistant", content="\n")
 
             if full_response and full_response.strip():
                 self.messages.append({"role": "assistant", "content": full_response})
@@ -204,7 +197,7 @@ class Agent:
 
             if error_message:
                 feedback = f"Tool call error: {error_message}\n\nPlease try again with the correct format."
-                yield ("tool", feedback)
+                yield ToolMessage(role="tool", content=feedback)
                 self.messages.append({"role": "user", "content": feedback})
                 continue_conversation = True
 
@@ -214,9 +207,9 @@ class Agent:
 
                 tool_result, success = self._execute_tool(tool_name, tool_params)
 
-                yield ("tool", tool_result)
+                yield ToolMessage(role="tool", content=tool_result)
 
-                history_message = f"Tool result: {tool_result}"
+                history_message = f"<tool_result>\n{tool_result}\n</tool_result>"
                 if not success:
                     tool = self.tools.get(tool_name)
                     if tool:
