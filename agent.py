@@ -5,7 +5,7 @@ from typing import Dict, Generator, List, Optional, Tuple, Union
 
 from openai import Client
 
-from schemas import AssistantMessage, ToolMessage
+from schemas import ResponseEvent
 from system_prompt import system_prompt
 from tools import DuckDuckGoSearch, Tool
 
@@ -154,7 +154,7 @@ class Agent:
 
     def process_message(
         self, user_input: str, stream: bool = False
-    ) -> Generator[Tuple[str, str], None, None]:
+    ) -> Generator[ResponseEvent, None, None]:
         """Process a user message and yield responses (assistant messages and tool results).
 
         This method handles the conversation loop, including tool calls and user interactions.
@@ -175,17 +175,17 @@ class Agent:
                     if chunk.choices[0].delta.content:
                         content = chunk.choices[0].delta.content
                         full_response += content
-                        yield AssistantMessage(role="assistant", content=content)
+                        yield ResponseEvent(type="assistant", content=content)
                 if full_response.strip() and not re.search(
                     r"</[^>]+>\s*$", full_response
                 ):
-                    yield AssistantMessage(role="assistant", content="\n")
+                    yield ResponseEvent(type="assistant", content="\n")
             else:
                 full_response = response.choices[0].message.content
                 if full_response:
-                    yield AssistantMessage(role="assistant", content=full_response)
+                    yield ResponseEvent(type="assistant", content=full_response)
                     if not re.search(r"</[^>]+>\s*$", full_response):
-                        yield AssistantMessage(role="assistant", content="\n")
+                        yield ResponseEvent(type="assistant", content="\n")
 
             if full_response and full_response.strip():
                 self.messages.append({"role": "assistant", "content": full_response})
@@ -197,7 +197,7 @@ class Agent:
 
             if error_message:
                 feedback = f"Tool call error: {error_message}\n\nPlease try again with the correct format."
-                yield ToolMessage(role="tool", content=feedback)
+                yield ResponseEvent(type="tool_error", content=feedback)
                 self.messages.append({"role": "user", "content": feedback})
                 continue_conversation = True
 
@@ -205,9 +205,14 @@ class Agent:
                 tool_name = list(tool_call.keys())[0]
                 tool_params = tool_call[tool_name]
 
+                yield ResponseEvent(type="tool_call_started", content=f"Executing tool: {tool_name}")
+
                 tool_result, success = self._execute_tool(tool_name, tool_params)
 
-                yield ToolMessage(role="tool", content=tool_result)
+                if success:
+                    yield ResponseEvent(type="tool_result", content=tool_result)
+                else:
+                    yield ResponseEvent(type="tool_error", content=tool_result)
 
                 history_message = f"<tool_result>\n{tool_result}\n</tool_result>"
                 if not success:
