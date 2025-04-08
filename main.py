@@ -38,21 +38,14 @@ def main(stream: bool = False):
             while True:
                 response = next(gen)
 
-                if response.role == "assistant":
+                if response.type == "assistant":
                     print(response.content, end="", flush=True)
-                elif response.role == "tool":
-                    # Add spacing before and after non-empty tool results
-                    if response.content.strip():
-                        # Format the output based on whether it's an error message or normal result
-                        if response.content.startswith(
-                            "Tool call error:"
-                        ) or response.content.startswith("Error:"):
-                            print(f"\n\n🔴 {response.content}\n")
-                        else:
-                            print(f"\n\n🟢 Tool result:\n{response.content}\n")
-                        # Add a newline before the next assistant response
-                        print("")
-                # We no longer need to handle ask_followup since we removed that tool
+                elif response.type == "tool_call_started":
+                    print(f"\n\n🟡 {response.content}\n")
+                elif response.type == "tool_result":
+                    print(f"\n\n🟢 Tool result:\n{response.content}\n")
+                elif response.type == "tool_error":
+                    print(f"\n\n🔴 Tool error:\n{response.content}\n")
         except StopIteration:
             # Generator is done
             pass
