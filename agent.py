@@ -276,7 +276,7 @@ class Agent:
                                 if "thinking" in halted_tokens.strip():
                                     thinking = True
                                     yield ResponseEvent(
-                                        type="thinking", content=(halted_tokens + "|")
+                                        type="thinking", content=(halted_tokens)
                                     )
                                 else:
                                     yield ResponseEvent(
@@ -303,9 +303,17 @@ class Agent:
                                     halted = False
                                     tokens_since_halted = 0
                                     tool_name = list(tool_call.keys())[0]
+                                    tool_params = tool_call[tool_name]
+
+                                    # Create an XML structure for the tool call
+                                    tool_call_xml = f"<tool_call>\n\t<{tool_name}>"
+                                    for param_name, param_value in tool_params.items():
+                                        tool_call_xml += f"\n\t\t<{param_name}>{param_value}</{param_name}>"
+                                    tool_call_xml += f"\n\t</{tool_name}>\n</tool_call>"
+
                                     yield ResponseEvent(
                                         type="tool_call_started",
-                                        content=f"Executing tool: {tool_name}",
+                                        content=f"Executing tool: \n{tool_call_xml}\n",
                                     )
                         elif thinking:
                             # content = (
@@ -320,7 +328,7 @@ class Agent:
                             # content = (
                             #     content + "·"
                             # )  # during development allows to differentiate the tokens
-                            
+
                             yield ResponseEvent(type="assistant", content=content)
 
                 if full_response.strip() and not re.search(
