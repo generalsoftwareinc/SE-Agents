@@ -240,7 +240,7 @@ class Agent:
         continue_conversation = True
         print(self.messages[0], self.messages[-1])
 
-        halted = False
+        halted, thinking = False, False
         tokens_since_halted = 0
         halted_tokens = ""
 
@@ -272,11 +272,19 @@ class Agent:
                             ):
                                 halted = False
                                 tokens_since_halted = 0
-                                yield ResponseEvent(
-                                    type="assistant", content=halted_tokens
-                                )
+
+                                if "thinking" in halted_tokens.strip():
+                                    thinking = True
+                                    yield ResponseEvent(
+                                        type="thinking", content=(halted_tokens + "|")
+                                    )
+                                else:
+                                    yield ResponseEvent(
+                                        type="assistant", content=halted_tokens
+                                    )
                                 halted_tokens = ""
-                            else:
+
+                            elif tokens_since_halted > 10:
 
                                 # Parse the current chunk for tool calls
                                 tool_call, error_message = self._parse_tool_call(
@@ -299,8 +307,19 @@ class Agent:
                                         type="tool_call_started",
                                         content=f"Executing tool: {tool_name}",
                                     )
+                        elif thinking:
+                            content = (
+                                content + "|"
+                            )  # during development allows to differentiate the tokens
+
+                            yield ResponseEvent(type="thinking", content=content)
+
+                            if full_response.strip().endswith("</thinking>"):
+                                thinking = False
                         else:
-                            content = content + "·" # during development allows to differentiate the tokens
+                            content = (
+                                content + "·"
+                            )  # during development allows to differentiate the tokens
                             yield ResponseEvent(type="assistant", content=content)
 
                 if full_response.strip() and not re.search(

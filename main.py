@@ -38,7 +38,7 @@ def main(stream: bool = False):
             while True:
                 response = next(gen)
 
-                if response.type == "assistant":
+                if response.type == "assistant" or response.type == "thinking":
                     print(response.content, end="", flush=True)
                 elif response.type == "tool_call_started":
                     print(f"\n\n🟡 {response.content}\n")
