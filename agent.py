@@ -164,6 +164,10 @@ class Agent:
         self.messages.append({"role": "user", "content": user_input})
         continue_conversation = True
 
+        halted = False
+        tokens_since_halted = 0
+        halted_tokens = ""
+
         while continue_conversation:
             response = self.client.chat.completions.create(
                 model=self.model, messages=self.messages, stream=stream
@@ -175,7 +179,53 @@ class Agent:
                     if chunk.choices[0].delta.content:
                         content = chunk.choices[0].delta.content
                         full_response += content
-                        yield ResponseEvent(type="assistant", content=content)
+
+                        if not halted and content.startswith("<"):
+                            halted = True
+                            halted_tokens += content
+                            continue
+
+                        elif halted:
+                            tokens_since_halted += 1
+                            halted_tokens += content
+
+                            if (
+                                tokens_since_halted == 1
+                                and not halted_tokens.strip().endswith("tool")
+                            ):
+                                halted = False
+                                tokens_since_halted = 0
+                                yield ResponseEvent(
+                                    type="assistant", content=halted_tokens
+                                )
+                                halted_tokens = ""
+                            else:
+
+                                # Parse the current chunk for tool calls
+                                tool_call, error_message = self._parse_tool_call(
+                                    full_response
+                                )
+
+                                halted_tokens = ""
+                                if error_message:
+                                    halted = False
+                                    tokens_since_halted = 0
+                                    yield ResponseEvent(
+                                        type="tool_error",
+                                        content=f"Tool call error: {error_message}",
+                                    )
+                                elif tool_call:
+                                    halted = False
+                                    tokens_since_halted = 0
+                                    tool_name = list(tool_call.keys())[0]
+                                    yield ResponseEvent(
+                                        type="tool_call_started",
+                                        content=f"Executing tool: {tool_name}",
+                                    )
+                        else:
+                            content = content + "·" # during development allows to differentiate the tokens
+                            yield ResponseEvent(type="assistant", content=content)
+
                 if full_response.strip() and not re.search(
                     r"</[^>]+>\s*$", full_response
                 ):
@@ -204,8 +254,6 @@ class Agent:
             elif tool_call:
                 tool_name = list(tool_call.keys())[0]
                 tool_params = tool_call[tool_name]
-
-                yield ResponseEvent(type="tool_call_started", content=f"Executing tool: {tool_name}")
 
                 tool_result, success = self._execute_tool(tool_name, tool_params)
 
