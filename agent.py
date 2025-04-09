@@ -308,18 +308,19 @@ class Agent:
                                         content=f"Executing tool: {tool_name}",
                                     )
                         elif thinking:
-                            content = (
-                                content + "|"
-                            )  # during development allows to differentiate the tokens
+                            # content = (
+                            #     content + "|"
+                            # )  # during development allows to differentiate the tokens
 
                             yield ResponseEvent(type="thinking", content=content)
 
                             if full_response.strip().endswith("</thinking>"):
                                 thinking = False
                         else:
-                            content = (
-                                content + "·"
-                            )  # during development allows to differentiate the tokens
+                            # content = (
+                            #     content + "·"
+                            # )  # during development allows to differentiate the tokens
+                            
                             yield ResponseEvent(type="assistant", content=content)
 
                 if full_response.strip() and not re.search(
