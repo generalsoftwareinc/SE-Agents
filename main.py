@@ -5,6 +5,12 @@ from tools import DuckDuckGoSearch, FireCrawlFetchPage
 
 
 def main(stream: bool = False):
+    GRAY = "\033[90m"
+    GREEN = "\033[92m"
+    BLUE = "\033[94m"
+    RED = "\033[91m"
+    RESET = "\033[0m"
+
     api_key = os.getenv("OPENROUTER_API_KEY")
     model = os.getenv("OPENROUTER_MODEL")
     firecrawl_key = os.getenv("FIRECRAWL_API_KEY")
@@ -38,14 +44,20 @@ def main(stream: bool = False):
             while True:
                 response = next(gen)
 
-                if response.type == "assistant" or response.type == "thinking":
+                if response.type == "assistant":
                     print(response.content, end="", flush=True)
+                elif response.type == "thinking":
+                    print(
+                        f"{GRAY}{response.content}{RESET}",
+                        end="",
+                        flush=True,
+                    )
                 elif response.type == "tool_call_started":
-                    print(f"\n\n🟡 {response.content}\n")
+                    print(f"\n\n{GREEN}🟡 {response.content}{RESET}\n")
                 elif response.type == "tool_result":
-                    print(f"\n\n🟢 Tool result:\n{response.content}\n")
+                    print(f"\n\n{BLUE}🟢 Tool result:\n{response.content}{RESET}\n")
                 elif response.type == "tool_error":
-                    print(f"\n\n🔴 Tool error:\n{response.content}\n")
+                    print(f"\n\n{RED}🔴 Tool error:\n{response.content}{RESET}\n")
         except StopIteration:
             # Generator is done
             pass

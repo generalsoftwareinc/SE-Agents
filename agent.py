@@ -1,6 +1,7 @@
 import os
 import re
 import xml.etree.ElementTree as ET
+from pprint import pprint
 from typing import Dict, Generator, List, Optional, Tuple, Union
 
 from openai import Client
@@ -10,6 +11,7 @@ from system_prompt import system_prompt
 from tools import DuckDuckGoSearch, Tool
 
 TOKEN_LIMIT = 80000
+
 
 class Agent:
     def __init__(
@@ -222,7 +224,6 @@ class Agent:
                     self._add_system_prompt(),
                     *conversation_messages,
                 ]
-                print(self.messages[0])
 
         if verbosity:
             print(f"===CONTEXT WINDOW TOKEN COUNT: {self.total_token_count}===")
@@ -238,7 +239,8 @@ class Agent:
         """
         self.messages.append({"role": "user", "content": user_input})
         continue_conversation = True
-        print(self.messages[0], self.messages[-1])
+        pprint(self.messages[0])
+        pprint(self.messages[-1])
 
         halted, thinking = False, False
         tokens_since_halted = 0
