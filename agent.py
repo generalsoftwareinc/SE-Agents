@@ -163,7 +163,7 @@ class Agent:
         """Calculate the total number of words in the content of all messages."""
         return sum(len(message["content"].split()) for message in self.messages)
 
-    def _truncate_context_window(self, verbosity=0):
+    def _truncate_context_window(self, verbosity=False):
         while self.total_token_count > self.token_limit:
             if verbosity:
                 print(
@@ -241,7 +241,7 @@ class Agent:
         print(self.messages[0], self.messages[-1])
 
         while continue_conversation:
-            self._truncate_context_window(verbosity=1)
+            self._truncate_context_window(verbosity=True)
             response = self.client.chat.completions.create(
                 model=self.model, messages=self.messages, stream=stream
             )
