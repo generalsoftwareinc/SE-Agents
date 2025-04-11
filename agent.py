@@ -263,23 +263,26 @@ class Agent:
                         content = chunk.choices[0].delta.content
                         full_response += content
 
-                        if not halted and content.startswith("<"):
+                        if not halted and not thinking and content.strip().startswith("<"):
                             halted = True
                             halted_tokens += content
+                            print(f"==halted {list(halted_tokens)}==")
                             continue
 
                         elif halted:
                             tokens_since_halted += 1
                             halted_tokens += content
+                            print(f"==halted {list(halted_tokens), tokens_since_halted}==")
 
                             if (
                                 tokens_since_halted == 1
                                 and not halted_tokens.strip().endswith("tool")
                             ):
+
                                 halted = False
                                 tokens_since_halted = 0
 
-                                if "thinking" in halted_tokens.strip():
+                                if "thinking" in halted_tokens.strip() or ('<html' not in full_response and '<th' in halted_tokens):
                                     thinking = True
                                     yield ResponseEvent(
                                         type="thinking", content=(halted_tokens)
@@ -322,18 +325,18 @@ class Agent:
                                         content=f"Executing tool: \n{tool_call_xml}\n",
                                     )
                         elif thinking:
-                            # content = (
-                            #     content + "|"
-                            # )  # during development allows to differentiate the tokens
+                            content = (
+                                content + "|"
+                            )  # during development allows to differentiate the tokens
 
                             yield ResponseEvent(type="thinking", content=content)
 
                             if full_response.strip().endswith("</thinking>"):
                                 thinking = False
                         else:
-                            # content = (
-                            #     content + "·"
-                            # )  # during development allows to differentiate the tokens
+                            content = (
+                                content + "·"
+                            )  # during development allows to differentiate the tokens
 
                             yield ResponseEvent(type="assistant", content=content)
 
