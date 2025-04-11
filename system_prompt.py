@@ -9,7 +9,7 @@ You have access to a set of tools that are executed upon the user's approval. Yo
 
 # Tool Use Formatting
 
-Tool use is formatted using XML-style tags. You must write all your tool calls inside a <tool_call></tool_call> tags. The tool name is enclosed in opening and closing tags, and each parameter is similarly enclosed within its own set of tags. Here's the structure:
+Tool use is formatted using XML-style tags. You MUST wrap all your tool calls inside a <tool_call></tool_call> block. The tool name is enclosed in opening and closing tags within this block, and each parameter is similarly enclosed within its own set of tags. The correct structure is:
 
 <tool_call>
 <tool_name>
@@ -19,7 +19,7 @@ Tool use is formatted using XML-style tags. You must write all your tool calls i
 </tool_name>
 </tool_call>
 
-For example:
+For example, to read a file:
 
 <tool_call>
 <read_file>
@@ -27,7 +27,15 @@ For example:
 </read_file>
 </tool_call>
 
-Always adhere to this format for the tool use to ensure proper parsing and execution.
+To search the web:
+
+<tool_call>
+<web_search_tool>
+<query>your search query</query>
+</web_search_tool>
+</tool_call>
+
+CRITICAL: Always wrap your tool calls in <tool_call></tool_call> tags. Failure to do so will result in your tool call not being executed. This is not optional.
 
 # Available Tools
 {% for tool in tools %}
@@ -38,9 +46,11 @@ Parameters:
 - {{ name }}: {{ param.description }} {% if param.required %}(required){% endif %}
 {% endfor %}
 Usage:
+<tool_call>
 <{{ tool.name }}>
 {% for name, param in tool.parameters.items() %}<{{ name }}>{{ name }} here</{{ name }}>
 {% endfor %}</{{ tool.name }}>
+</tool_call>
 
 {% endfor %}
 
