@@ -1,7 +1,11 @@
 import os
 
+from dotenv import load_dotenv
+
 from agent import Agent
 from tools import DuckDuckGoSearch, FireCrawlFetchPage
+
+load_dotenv(override=True)
 
 
 def main(stream: bool = False):

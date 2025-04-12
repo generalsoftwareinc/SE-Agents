@@ -29,7 +29,12 @@ class Agent:
 
         # Replace the tools template with the formatted tools section
         system_message = self._add_system_prompt()
+        # Initialize messages list with the processed system prompt
         self.messages: List[Dict[str, str]] = [system_message]
+        # Print the actual system prompt being used for debugging
+        print("--- Initial System Prompt (Processed) ---")
+        print(self.messages[0]["content"])
+        print("---------------------------------------")
 
     def _add_system_prompt(self):
         # Format the tools section of the system prompt
@@ -54,12 +59,26 @@ class Agent:
                 tools_section += f"<{name}>{name} here</{name}>\n"
             tools_section += f"</{tool.name}>\n\n"
 
+        # Define the exact placeholder string from system_prompt.py
+        placeholder = """{% for tool in tools %}
+## {{ tool.name }}
+{{ tool.description }}
+Parameters:
+{% for name, param in tool.parameters.items() %}
+- {{ name }}: {{ param.description }} {% if param.required %}(required){% endif %}
+{% endfor %}
+Usage:
+<tool_call>
+<{{ tool.name }}>
+{% for name, param in tool.parameters.items() %}<{{ name }}>{{ name }} here</{{ name }}>
+{% endfor %}</{{ tool.name }}>
+</tool_call>
+
+{% endfor %}"""
+
         return {
             "role": "system",
-            "content": system_prompt.replace(
-                "{% for tool in tools %}\n## {{ tool.name }}\n{{ tool.description }}\nParameters:\n{% for name, param in tool.parameters.items() %}\n- {{ name }}: {{ param.description }} {% if param.required %}(required){% endif %}\n{% endfor %}\nUsage:\n<{{ tool.name }}>\n{% for name, param in tool.parameters.items() %}<{{ name }}>{{ name }} here</{{ name }}>\n{% endfor %}</{{ tool.name }}>\n\n{% endfor %}",
-                tools_section,
-            ),
+            "content": system_prompt.replace(placeholder, tools_section),
         }
 
     def _parse_tool_call(
@@ -239,8 +258,6 @@ class Agent:
         """
         self.messages.append({"role": "user", "content": user_input})
         continue_conversation = True
-        pprint(self.messages[0])
-        pprint(self.messages[-1])
 
         halted, thinking = False, False
         tokens_since_halted = 0
