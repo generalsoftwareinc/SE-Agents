@@ -19,20 +19,30 @@ TOKEN_LIMIT = 80000
 class Agent:
     def __init__(
         self,
-        api_key: str,
-        model: str,
+        api_key: str = None,
+        model: str = None,
         tools: List[Tool] = None,
         base_url: str = "https://openrouter.ai/api/v1",
         token_limit: int = TOKEN_LIMIT,
-        add_default_instructions: bool = True,
-        description: str = None,
+        description: Union[str, None] = None,
+        rules: Union[str, List[str], None] = None,
+        objective: Union[str, List[str], None] = None,
+        add_tool_instrutions: bool = True,
+        add_default_rules: bool = True,
+        add_default_objective: bool = True,
     ):
         self.token_limit = token_limit
-        self.client = Client(api_key=api_key, base_url=base_url)
+        self.client = (
+            Client(api_key=api_key, base_url=base_url) if api_key and model else None
+        )
         self.model = model
         self.tools = {tool.name: tool for tool in (tools or [])}
-        self.add_default_instructions = add_default_instructions
         self._custom_description = description
+        self._custom_rules = rules
+        self._custom_objective = objective
+        self.add_tool_instrutions = add_tool_instrutions
+        self.add_default_rules = add_default_rules
+        self.add_default_objective = add_default_objective
 
         # Replace the tools template with the formatted tools section
         system_message = self._add_system_prompt()
@@ -43,30 +53,38 @@ class Agent:
         print(self.messages[0]["content"])
         print("---------------------------------------")
 
+    def _section_to_str(self, section):
+        if section is None:
+            return ""
+        if isinstance(section, list):
+            return "\n".join(section)
+        return section
+
     def _add_system_prompt(self):
         # Format the tools section of the system prompt
         tools_section = ""
-        for tool in self.tools.values():
-            # Tool header
-            tools_section += f"## {tool.name}\n"
-            tools_section += f"{tool.description}\n"
-            tools_section += "Parameters:\n"
+        if self.add_tool_instrutions:
+            for tool in self.tools.values():
+                # Tool header
+                tools_section += f"## {tool.name}\n"
+                tools_section += f"{tool.description}\n"
+                tools_section += "Parameters:\n"
 
-            # Parameters
-            for name, param in tool.parameters.items():
-                required = "(required)" if param.get("required", False) else ""
-                tools_section += (
-                    f"- {name}: {param.get('description', '')} {required}\n"
-                )
+                # Parameters
+                for name, param in tool.parameters.items():
+                    required = "(required)" if param.get("required", False) else ""
+                    tools_section += (
+                        f"- {name}: {param.get('description', '')} {required}\n"
+                    )
 
-            # Usage example
-            tools_section += "Usage:\n"
-            tools_section += "<tool_call>\n"  # Add opening tool_call tag
-            tools_section += f"<{tool.name}>\n"
-            for name in tool.parameters:
-                tools_section += f"<{name}>{name} here</{name}>\n"
-            tools_section += f"</{tool.name}>\n"
-            tools_section += "</tool_call>\n\n"  # Add closing tool_call tag
+                # Usage example
+                tools_section += "Usage:\n"
+                tools_section += "<tool_call>\n"  # Add opening tool_call tag
+                tools_section += f"<{tool.name}>\n"
+                for name in tool.parameters:
+                    tools_section += f"<{name}>{name} here</{name}>\n"
+                tools_section += f"</{tool.name}>\n"
+                tools_section += "</tool_call>\n\n"  # Add closing tool_call tag
 
         # Define the exact placeholder string from system_prompt.py
         placeholder = """{% for tool in tools %}
@@ -85,22 +103,38 @@ Usage:
 
 {% endfor %}"""
 
-        # Determine which description to use
+        # Description section
         if self._custom_description is not None:
             description_section = self._custom_description
         else:
             description_section = description_prompt
 
-        # Build the full prompt based on add_default_instructions
-        if self.add_default_instructions:
-            full_prompt = (
-                description_section
-                + tool_calling_prompt
-                + rules_prompt
-                + objective_prompt
-            )
+        # Rules section
+        if self._custom_rules is not None:
+            rules_section = self._section_to_str(self._custom_rules)
+        elif self.add_default_rules:
+            rules_section = rules_prompt
         else:
-            full_prompt = description_section
+            rules_section = ""
+
+        # Objective section
+        if self._custom_objective is not None:
+            objective_section = self._section_to_str(self._custom_objective)
+        elif self.add_default_objective:
+            objective_section = objective_prompt
+        else:
+            objective_section = ""
+
+        # Tool calling instructions
+        tool_calling_section = tool_calling_prompt if self.add_tool_instrutions else ""
+
+        # Compose the full prompt
+        full_prompt = (
+            description_section
+            + ("\n" + tool_calling_section if tool_calling_section else "")
+            + ("\n" + rules_section if rules_section else "")
+            + ("\n" + objective_section if objective_section else "")
+        )
 
         return {
             "role": "system",

@@ -33,7 +33,6 @@ def main():
         api_key=os.getenv("OPENROUTER_API_KEY"),
         model=model,
         tools=[DuckDuckGoSearch(), FireCrawlFetchPage(firecrawl_key)],
-        add_default_instructions=add_default_instructions,
         description=custom_description,
     )
 
