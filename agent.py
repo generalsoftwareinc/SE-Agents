@@ -259,14 +259,6 @@ Usage:
         self.messages.append({"role": "user", "content": user_input})
         continue_conversation = True
 
-        halted, thinking = False, False
-        tokens_since_halted = 0
-        halted_tokens = ""
-
-        halted, thinking = False, False
-        tokens_since_halted = 0
-        halted_tokens = ""
-
         while continue_conversation:
             self._truncate_context_window(verbosity=True)
             response = self.client.chat.completions.create(
@@ -275,87 +267,73 @@ Usage:
 
             full_response = ""
             if stream:
+                halted = False
+                thinking = False
+                thinking_found = False
+                tool_found = False
+                tokens_since_halted = 0
                 for chunk in response:
                     if chunk.choices[0].delta.content:
                         content = chunk.choices[0].delta.content
                         full_response += content
 
-                        if not halted and not thinking and content.strip().startswith("<"):
+                        if "<" in content:
                             halted = True
-                            halted_tokens += content
-                            print(f"==halted {list(halted_tokens)}==")
-                            continue
 
-                        elif halted:
+                        if halted:
                             tokens_since_halted += 1
-                            halted_tokens += content
-                            print(f"==halted {list(halted_tokens), tokens_since_halted}==")
 
-                            if (
-                                tokens_since_halted == 1
-                                and not halted_tokens.strip().endswith("tool")
-                            ):
-
+                            if tokens_since_halted > 5:
                                 halted = False
-                                tokens_since_halted = 0
 
-                                if "thinking" in halted_tokens.strip() or ('<html' not in full_response and '<th' in halted_tokens):
-                                    thinking = True
-                                    yield ResponseEvent(
-                                        type="thinking", content=(halted_tokens)
-                                    )
-                                else:
-                                    yield ResponseEvent(
-                                        type="assistant", content=halted_tokens
-                                    )
-                                halted_tokens = ""
-
-                            elif tokens_since_halted > 10:
-
-                                # Parse the current chunk for tool calls
+                            if "<tool" in full_response and not tool_found:
                                 tool_call, error_message = self._parse_tool_call(
                                     full_response
                                 )
 
-                                halted_tokens = ""
                                 if error_message:
                                     halted = False
-                                    tokens_since_halted = 0
                                     yield ResponseEvent(
-                                        type="tool_error",
-                                        content=f"Tool call error: {error_message}",
+                                        type="tool_error", content=error_message
                                     )
-                                elif tool_call:
-                                    halted = False
-                                    tokens_since_halted = 0
-                                    tool_name = list(tool_call.keys())[0]
-                                    tool_params = tool_call[tool_name]
-
-                                    # Create an XML structure for the tool call
-                                    tool_call_xml = f"<tool_call>\n\t<{tool_name}>"
-                                    for param_name, param_value in tool_params.items():
-                                        tool_call_xml += f"\n\t\t<{param_name}>{param_value}</{param_name}>"
-                                    tool_call_xml += f"\n\t</{tool_name}>\n</tool_call>"
+                                if tool_call:
+                                    tool_found = True
+                                    halted = True
 
                                     yield ResponseEvent(
-                                        type="tool_call_started",
-                                        content=f"Executing tool: \n{tool_call_xml}\n",
+                                        type="tool_call_started", content=str(tool_call)
                                     )
-                        elif thinking:
-                            content = (
-                                content + "|"
-                            )  # during development allows to differentiate the tokens
 
-                            yield ResponseEvent(type="thinking", content=content)
+                            if "<thinking>" in full_response and not thinking_found:
+                                thinking = True
+                                halted = False
 
-                            if full_response.strip().endswith("</thinking>"):
-                                thinking = False
-                        else:
-                            content = (
-                                content + "·"
-                            )  # during development allows to differentiate the tokens
+                        if (
+                            "</thinking>" in full_response
+                            and thinking
+                            and not thinking_found
+                        ):
+                            thinking = False
+                            thinking_found = True
+                            new_content = full_response.split("</thinking>")[-1]
+                            to_yield = content.replace(new_content, "")
+                            content = new_content
+                            yield ResponseEvent(
+                                type="thinking",
+                                content=to_yield + " || ",
+                            )
 
-                            yield ResponseEvent(type="assistant", content=content)
+                        if not halted:
+                            if thinking:
+                                yield ResponseEvent(
+                                    type="thinking",
+                                    content=content + " | ",
+                                )
+                            else:
+                                yield ResponseEvent(
+                                    type="assistant",
+                                    content=content + " . ",
+                                )
 
                 if full_response.strip() and not re.search(
                     r"</[^>]+>\s*$", full_response
