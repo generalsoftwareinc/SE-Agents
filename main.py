@@ -23,10 +23,18 @@ def main():
         print("Error: OPENROUTER_API_KEY environment variable not set")
         return
 
+    # Example: set to False to omit default instructions, or provide a custom description string
+    add_default_instructions = (
+        True  # Change to False to omit tool_calling, rules, and objective
+    )
+    custom_description = None  # Or set to a string to override the default description
+
     agent = Agent(
         api_key=os.getenv("OPENROUTER_API_KEY"),
         model=model,
         tools=[DuckDuckGoSearch(), FireCrawlFetchPage(firecrawl_key)],
+        add_default_instructions=add_default_instructions,
+        description=custom_description,
     )
 
     # print(agent.messages[0]["content"])

@@ -6,8 +6,11 @@ from typing import Dict, Generator, List, Optional, Tuple, Union
 
 from openai import Client
 
+from prompts.description import prompt as description_prompt
+from prompts.objective import prompt as objective_prompt
+from prompts.rules import prompt as rules_prompt
+from prompts.tool_calling import prompt as tool_calling_prompt
 from schemas import ResponseEvent
-from system_prompt import system_prompt
 from tools import DuckDuckGoSearch, Tool
 
 TOKEN_LIMIT = 80000
@@ -21,11 +24,15 @@ class Agent:
         tools: List[Tool] = None,
         base_url: str = "https://openrouter.ai/api/v1",
         token_limit: int = TOKEN_LIMIT,
+        add_default_instructions: bool = True,
+        description: str = None,
     ):
         self.token_limit = token_limit
         self.client = Client(api_key=api_key, base_url=base_url)
         self.model = model
         self.tools = {tool.name: tool for tool in (tools or [])}
+        self.add_default_instructions = add_default_instructions
+        self._custom_description = description
 
         # Replace the tools template with the formatted tools section
         system_message = self._add_system_prompt()
@@ -78,9 +85,26 @@ Usage:
 
 {% endfor %}"""
 
+        # Determine which description to use
+        if self._custom_description is not None:
+            description_section = self._custom_description
+        else:
+            description_section = description_prompt
+
+        # Build the full prompt based on add_default_instructions
+        if self.add_default_instructions:
+            full_prompt = (
+                description_section
+                + tool_calling_prompt
+                + rules_prompt
+                + objective_prompt
+            )
+        else:
+            full_prompt = description_section
+
         return {
             "role": "system",
-            "content": system_prompt.replace(placeholder, tools_section),
+            "content": full_prompt.replace(placeholder, tools_section),
         }
 
     def _parse_tool_call(
