@@ -56,7 +56,7 @@ def main():
                         end="",
                         flush=True,
                     )
-                elif response.type == "tool_call_started":
+                elif response.type == "tool_call":
                     print(f"\n\n{GREEN}🟡 {response.content}{RESET}\n")
                 elif response.type == "tool_result":
                     print(f"\n\n{BLUE}🟢 Tool result:\n{response.content}{RESET}\n")

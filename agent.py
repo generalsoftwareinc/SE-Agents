@@ -324,7 +324,7 @@ Usage:
                                         tokens_since_halted = 0
                                         halted_tokens = ""
                                         yield ResponseEvent(
-                                            type="tool_call_started",
+                                            type="tool_call",
                                             content=str(tool_call),
                                         )
 

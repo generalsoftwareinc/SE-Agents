@@ -1,6 +1,8 @@
-from pydantic import BaseModel
 from typing import Literal
 
+from pydantic import BaseModel
+
+
 class ResponseEvent(BaseModel):
-    type: Literal["assistant","thinking", "tool_call_started", "tool_result", "tool_error"]
+    type: Literal["assistant", "thinking", "tool_call", "tool_result", "tool_error"]
     content: str
