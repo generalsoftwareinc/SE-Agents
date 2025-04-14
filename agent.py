@@ -268,71 +268,87 @@ Usage:
             full_response = ""
             if stream:
                 halted = False
-                thinking = False
+                tag_found = False
                 thinking_found = False
                 tool_found = False
                 tokens_since_halted = 0
+                halted_tokens = ""
                 for chunk in response:
                     if chunk.choices[0].delta.content:
-                        content = chunk.choices[0].delta.content
-                        full_response += content
+                        full_content = chunk.choices[0].delta.content
+                        parts = re.findall(r"(\s*\S+\s*|\s+)", full_content)
+                        # print(f"CONTENT: '{full_content}' ===> PARTS: '{parts}'\n")
+                        for content in parts:
+                            full_response += content
 
-                        if "<" in content:
-                            halted = True
+                            if "<" in content:
+                                halted = True
 
-                        if halted:
-                            tokens_since_halted += 1
+                            if halted:
+                                tokens_since_halted += 1
+                                halted_tokens += content
 
-                            if tokens_since_halted > 5:
-                                halted = False
-
-                            if "<tool" in full_response and not tool_found:
-                                tool_call, error_message = self._parse_tool_call(
-                                    full_response
-                                )
-
-                                if error_message:
+                                if tokens_since_halted > 5 and not tag_found:
                                     halted = False
+                                    tokens_since_halted = 0
+                                    content = halted_tokens
+                                    tokens_since_halted = 0
                                     yield ResponseEvent(
-                                        type="tool_error", content=error_message
+                                        type="assistant",
+                                        content=halted_tokens,
                                     )
-                                if tool_call:
-                                    tool_found = True
-                                    halted = True
+                                    halted_tokens = ""
+                                elif (
+                                    "<tool_call>" in full_response
+                                    or "<thinking>" in full_response
+                                ) and not tag_found:
+                                    tag_found = True
 
-                                    yield ResponseEvent(
-                                        type="tool_call_started", content=str(tool_call)
-                                    )
+                                if tag_found:
+                                    if (
+                                        "</tool_call>" in full_response
+                                        and not tool_found
+                                    ):
+                                        tag_found = False
+                                        tool_call, error_message = (
+                                            self._parse_tool_call(full_response)
+                                        )
 
-                            if "<thinking>" in full_response and not thinking_found:
-                                thinking = True
-                                halted = False
+                                        if error_message:
+                                            halted = False
+                                            tokens_since_halted = 0
+                                            halted_tokens = ""
+                                            yield ResponseEvent(
+                                                type="tool_error", content=error_message
+                                            )
+                                        if tool_call:
+                                            tool_found = True
+                                            halted = False
+                                            tokens_since_halted = 0
+                                            halted_tokens = ""
+                                            yield ResponseEvent(
+                                                type="tool_call_started",
+                                                content=str(tool_call),
+                                            )
 
-                        if (
-                            "</thinking>" in full_response
-                            and thinking
-                            and not thinking_found
-                        ):
-                            thinking = False
-                            thinking_found = True
-                            new_content = full_response.split("</thinking>")[-1]
-                            to_yield = content.replace(new_content, "")
-                            content = new_content
-                            yield ResponseEvent(
-                                type="thinking",
-                                content=to_yield + " || ",
-                            )
+                                    if (
+                                        "</thinking>" in full_response
+                                        and not thinking_found
+                                    ):
+                                        tag_found = False
+                                        thinking_found = True
+                                        halted = False
+                                        tokens_since_halted = 0
+                                        yield ResponseEvent(
+                                            type="thinking",
+                                            content=halted_tokens,
+                                        )
+                                        halted_tokens = ""
 
-                        if not halted:
-                            if thinking:
-                                yield ResponseEvent(
-                                    type="thinking",
-                                    content=content + " | ",
-                                )
                             else:
                                 yield ResponseEvent(
                                     type="assistant",
-                                    content=content + " . ",
+                                    content=content,
                                 )
 
                 if full_response.strip() and not re.search(
