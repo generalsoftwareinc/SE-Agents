@@ -8,7 +8,7 @@ from tools import DuckDuckGoSearch, FireCrawlFetchPage
 load_dotenv(override=True)
 
 
-def main(stream: bool = False):
+def main():
     GRAY = "\033[90m"
     GREEN = "\033[92m"
     BLUE = "\033[94m"
@@ -41,7 +41,7 @@ def main(stream: bool = False):
 
         print("\nAssistant: ", end="")
         # Create the generator
-        gen = agent.process_message(user_input, stream=stream)
+        gen = agent.process_message(user_input)
 
         # Process responses from the generator
         try:
@@ -68,4 +68,4 @@ def main(stream: bool = False):
 
 
 if __name__ == "__main__":
-    main(stream=True)
+    main()
