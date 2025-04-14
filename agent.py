@@ -54,10 +54,12 @@ class Agent:
 
             # Usage example
             tools_section += "Usage:\n"
+            tools_section += "<tool_call>\n"  # Add opening tool_call tag
             tools_section += f"<{tool.name}>\n"
             for name in tool.parameters:
                 tools_section += f"<{name}>{name} here</{name}>\n"
-            tools_section += f"</{tool.name}>\n\n"
+            tools_section += f"</{tool.name}>\n"
+            tools_section += "</tool_call>\n\n"  # Add closing tool_call tag
 
         # Define the exact placeholder string from system_prompt.py
         placeholder = """{% for tool in tools %}
