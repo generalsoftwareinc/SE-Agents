@@ -123,6 +123,11 @@ class ExaSearchContent(Tool):
                     "type": "string",
                     "description": "Search query",
                     "required": True,
+                },
+                "include_domains":{
+                    "type": "List[string]",
+                    "description": "List of domains to include in the search.",
+                    "required": False
                 }
             },
         )
