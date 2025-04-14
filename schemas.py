@@ -1,11 +1,8 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
-class BaseMessage(BaseModel):
-    role: str
+
+class ResponseEvent(BaseModel):
+    type: Literal["assistant", "thinking", "tool_call", "tool_result", "tool_error"]
     content: str
-
-class AssistantMessage(BaseMessage):
-    pass
-
-class ToolMessage(BaseMessage):
-    pass

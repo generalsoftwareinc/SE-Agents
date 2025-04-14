@@ -1,15 +1,17 @@
 import os
 import re
 import xml.etree.ElementTree as ET
+from pprint import pprint
 from typing import Dict, Generator, List, Optional, Tuple, Union
 
 from openai import Client
 
-from schemas import AssistantMessage, ToolMessage
+from schemas import ResponseEvent
 from system_prompt import system_prompt
 from tools import DuckDuckGoSearch, Tool
 
 TOKEN_LIMIT = 80000
+
 
 class Agent:
     def __init__(
@@ -27,7 +29,12 @@ class Agent:
 
         # Replace the tools template with the formatted tools section
         system_message = self._add_system_prompt()
+        # Initialize messages list with the processed system prompt
         self.messages: List[Dict[str, str]] = [system_message]
+        # Print the actual system prompt being used for debugging
+        print("--- Initial System Prompt (Processed) ---")
+        print(self.messages[0]["content"])
+        print("---------------------------------------")
 
     def _add_system_prompt(self):
         # Format the tools section of the system prompt
@@ -47,17 +54,33 @@ class Agent:
 
             # Usage example
             tools_section += "Usage:\n"
+            tools_section += "<tool_call>\n"  # Add opening tool_call tag
             tools_section += f"<{tool.name}>\n"
             for name in tool.parameters:
                 tools_section += f"<{name}>{name} here</{name}>\n"
-            tools_section += f"</{tool.name}>\n\n"
+            tools_section += f"</{tool.name}>\n"
+            tools_section += "</tool_call>\n\n"  # Add closing tool_call tag
+
+        # Define the exact placeholder string from system_prompt.py
+        placeholder = """{% for tool in tools %}
+## {{ tool.name }}
+{{ tool.description }}
+Parameters:
+{% for name, param in tool.parameters.items() %}
+- {{ name }}: {{ param.description }} {% if param.required %}(required){% endif %}
+{% endfor %}
+Usage:
+<tool_call>
+<{{ tool.name }}>
+{% for name, param in tool.parameters.items() %}<{{ name }}>{{ name }} here</{{ name }}>
+{% endfor %}</{{ tool.name }}>
+</tool_call>
+
+{% endfor %}"""
 
         return {
             "role": "system",
-            "content": system_prompt.replace(
-                "{% for tool in tools %}\n## {{ tool.name }}\n{{ tool.description }}\nParameters:\n{% for name, param in tool.parameters.items() %}\n- {{ name }}: {{ param.description }} {% if param.required %}(required){% endif %}\n{% endfor %}\nUsage:\n<{{ tool.name }}>\n{% for name, param in tool.parameters.items() %}<{{ name }}>{{ name }} here</{{ name }}>\n{% endfor %}</{{ tool.name }}>\n\n{% endfor %}",
-                tools_section,
-            ),
+            "content": system_prompt.replace(placeholder, tools_section),
         }
 
     def _parse_tool_call(
@@ -222,14 +245,11 @@ class Agent:
                     self._add_system_prompt(),
                     *conversation_messages,
                 ]
-                print(self.messages[0])
 
         if verbosity:
             print(f"===CONTEXT WINDOW TOKEN COUNT: {self.total_token_count}===")
 
-    def process_message(
-        self, user_input: str, stream: bool = False
-    ) -> Generator[Tuple[str, str], None, None]:
+    def process_message(self, user_input: str) -> Generator[ResponseEvent, None, None]:
         """Process a user message and yield responses (assistant messages and tool results).
 
         This method handles the conversation loop, including tool calls and user interactions.
@@ -238,31 +258,98 @@ class Agent:
         """
         self.messages.append({"role": "user", "content": user_input})
         continue_conversation = True
-        print(self.messages[0], self.messages[-1])
 
         while continue_conversation:
             self._truncate_context_window(verbosity=True)
             response = self.client.chat.completions.create(
-                model=self.model, messages=self.messages, stream=stream
+                model=self.model, messages=self.messages, stream=True
             )
 
             full_response = ""
-            if stream:
-                for chunk in response:
-                    if chunk.choices[0].delta.content:
-                        content = chunk.choices[0].delta.content
+            tool_call, error_message = None, None
+            halted = False
+            tag_found = False
+            thinking_found = False
+            tool_found = False
+            tokens_since_halted = 0
+            halted_tokens = ""
+            for chunk in response:
+                if chunk.choices[0].delta.content:
+                    full_content = chunk.choices[0].delta.content
+                    parts = re.findall(r"(\s*\S+\s*|\s+)", full_content)
+                    # print(f"CONTENT: '{full_content}' ===> PARTS: '{parts}'\n")
+                    for content in parts:
                         full_response += content
-                        yield AssistantMessage(role="assistant", content=content)
-                if full_response.strip() and not re.search(
-                    r"</[^>]+>\s*$", full_response
-                ):
-                    yield AssistantMessage(role="assistant", content="\n")
-            else:
-                full_response = response.choices[0].message.content
-                if full_response:
-                    yield AssistantMessage(role="assistant", content=full_response)
-                    if not re.search(r"</[^>]+>\s*$", full_response):
-                        yield AssistantMessage(role="assistant", content="\n")
+
+                        if "<" in content:
+                            halted = True
+
+                        if halted:
+                            tokens_since_halted += 1
+                            halted_tokens += content
+
+                            if tokens_since_halted > 5 and not tag_found:
+                                halted = False
+                                tokens_since_halted = 0
+                                content = halted_tokens
+                                tokens_since_halted = 0
+                                yield ResponseEvent(
+                                    type="assistant",
+                                    content=halted_tokens,
+                                )
+                                halted_tokens = ""
+                            elif (
+                                "<tool_call>" in full_response
+                                or "<thinking>" in full_response
+                            ) and not tag_found:
+                                tag_found = True
+
+                            if tag_found:
+                                if "</tool_call>" in full_response and not tool_found:
+                                    tag_found = False
+                                    tool_call, error_message = self._parse_tool_call(
+                                        full_response
+                                    )
+
+                                    if error_message:
+                                        halted = False
+                                        tokens_since_halted = 0
+                                        halted_tokens = ""
+                                        yield ResponseEvent(
+                                            type="tool_error", content=error_message
+                                        )
+                                    if tool_call:
+                                        tool_found = True
+                                        halted = False
+                                        tokens_since_halted = 0
+                                        halted_tokens = ""
+                                        yield ResponseEvent(
+                                            type="tool_call",
+                                            content=str(tool_call),
+                                        )
+
+                                if (
+                                    "</thinking>" in full_response
+                                    and not thinking_found
+                                ):
+                                    tag_found = False
+                                    thinking_found = True
+                                    halted = False
+                                    tokens_since_halted = 0
+                                    yield ResponseEvent(
+                                        type="thinking",
+                                        content=halted_tokens,
+                                    )
+                                    halted_tokens = ""
+
+                        else:
+                            yield ResponseEvent(
+                                type="assistant",
+                                content=content,
+                            )
+
+            if full_response.strip() and not re.search(r"</[^>]+>\s*$", full_response):
+                yield ResponseEvent(type="assistant", content="\n")
 
             if full_response and full_response.strip():
                 self.messages.append({"role": "assistant", "content": full_response})
@@ -270,11 +357,9 @@ class Agent:
                 continue_conversation = False
                 continue
 
-            tool_call, error_message = self._parse_tool_call(full_response)
-
             if error_message:
                 feedback = f"Tool call error: {error_message}\n\nPlease try again with the correct format."
-                yield ToolMessage(role="tool", content=feedback)
+                yield ResponseEvent(type="tool_error", content=feedback)
                 self.messages.append({"role": "user", "content": feedback})
                 continue_conversation = True
 
@@ -284,7 +369,10 @@ class Agent:
 
                 tool_result, success = self._execute_tool(tool_name, tool_params)
 
-                yield ToolMessage(role="tool", content=tool_result)
+                if success:
+                    yield ResponseEvent(type="tool_result", content=tool_result)
+                else:
+                    yield ResponseEvent(type="tool_error", content=tool_result)
 
                 history_message = f"<tool_result>\n{tool_result}\n</tool_result>"
                 if not success:
