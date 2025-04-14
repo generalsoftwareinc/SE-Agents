@@ -266,6 +266,7 @@ Usage:
             )
 
             full_response = ""
+            tool_call, error_message = None, None
             if stream:
                 halted = False
                 tag_found = False
@@ -367,8 +368,6 @@ Usage:
             else:
                 continue_conversation = False
                 continue
-
-            tool_call, error_message = self._parse_tool_call(full_response)
 
             if error_message:
                 feedback = f"Tool call error: {error_message}\n\nPlease try again with the correct format."
