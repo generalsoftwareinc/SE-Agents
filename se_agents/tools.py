@@ -1,5 +1,7 @@
 from typing import List
 
+from exa_py import Exa
+from dotenv import load_dotenv
 from duckduckgo_search import DDGS
 from firecrawl import FirecrawlApp
 
@@ -109,3 +111,31 @@ class FireCrawlFetchPage(Tool):
                 return markdown_content
         except Exception as e:
             return f"Error fetching page: {e}"
+
+
+class ExaSearchContent(Tool):
+    def __init__(self, api_key: str):
+        super().__init__(
+            name="exa_web_search",
+            description="Search the web using Exa Search",
+            parameters={
+                "query": {
+                    "type": "string",
+                    "description": "Search query",
+                    "required": True,
+                }
+            },
+        )
+
+        self.client = Exa(api_key=api_key)
+
+    def execute(self, **kwargs) -> str:
+        query = kwargs.get("query")
+        if not query:
+            return "Error: No query provided"
+
+        results = []
+
+        for r in self.client.search_and_contents(query=query, num_results=3).results:
+            results.append(f"- {r.title}\n  URL: {r.url}\n  Body: {r.text}")
+        return "Search results:\n" + "\n\n".join(results)
