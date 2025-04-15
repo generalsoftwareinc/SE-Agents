@@ -1,7 +1,7 @@
 import re
 import xml.etree.ElementTree as ET
 from pprint import pprint
-from typing import Dict, Generator, List, Optional, Union
+from typing import AsyncGenerator, Dict, List, Optional, Union
 
 from openai import Client
 
@@ -251,7 +251,7 @@ class Agent:
         if verbosity:
             print(f"===CONTEXT WINDOW TOKEN COUNT: {self.total_token_count}===")
 
-    def process_message(self, user_input: str) -> Generator[ResponseEvent, None, None]:
+    async def run_stream(self, user_input: str) -> AsyncGenerator[ResponseEvent, None]:
         """Process a user message and yield responses (assistant messages and tool results).
 
         This method handles the conversation loop, including tool calls and user interactions.
