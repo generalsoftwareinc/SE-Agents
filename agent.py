@@ -1,8 +1,7 @@
-import os
 import re
 import xml.etree.ElementTree as ET
 from pprint import pprint
-from typing import Dict, Generator, List, Optional, Tuple, Union
+from typing import Dict, Generator, List, Optional, Union
 
 from openai import Client
 
@@ -10,8 +9,9 @@ from prompts.description import prompt as description_prompt
 from prompts.objective import prompt as objective_prompt
 from prompts.rules import prompt as rules_prompt
 from prompts.tool_calling import prompt as tool_calling_prompt
+from prompts.tool_calling import tools_placeholder
 from schemas import ResponseEvent
-from tools import DuckDuckGoSearch, Tool
+from tools import Tool
 
 TOKEN_LIMIT = 80000
 
@@ -96,21 +96,7 @@ class Agent:
                 tools_section += "</tool_call>\n\n"  # Add closing tool_call tag
 
         # Define the exact placeholder string from system_prompt.py
-        placeholder = """{% for tool in tools %}
-## {{ tool.name }}
-{{ tool.description }}
-Parameters:
-{% for name, param in tool.parameters.items() %}
-- {{ name }}: {{ param.description }} {% if param.required %}(required){% endif %}
-{% endfor %}
-Usage:
-<tool_call>
-<{{ tool.name }}>
-{% for name, param in tool.parameters.items() %}<{{ name }}>{{ name }} here</{{ name }}>
-{% endfor %}</{{ tool.name }}>
-</tool_call>
-
-{% endfor %}"""
+        placeholder = tools_placeholder
 
         # Description section
         if self._custom_description is not None:

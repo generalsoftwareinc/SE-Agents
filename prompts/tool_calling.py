@@ -1,4 +1,19 @@
-prompt = """TOOL USE
+tools_placeholder = """{% for tool in tools %}
+## {{ tool.name }}
+{{ tool.description }}
+Parameters:
+{% for name, param in tool.parameters.items() %}
+- {{ name }}: {{ param.description }} {% if param.required %}(required){% endif %}
+{% endfor %}
+Usage:
+<tool_call>
+<{{ tool.name }}>
+{% for name, param in tool.parameters.items() %}<{{ name }}>{{ name }} here</{{ name }}>
+{% endfor %}</{{ tool.name }}>
+</tool_call>
+{% endfor %}"""
+
+prompt = f"""TOOL USE
 
 You have access to a set of tools that are executed upon the user's approval. You can use one tool per message, and will receive the result of that tool use in the user's response. You use tools step-by-step to accomplish a given task, with each tool use informed by the result of the previous tool use.
 
@@ -33,21 +48,8 @@ To search the web:
 CRITICAL: Always wrap your tool calls in <tool_call></tool_call> tags. DO NOT WRAP tool_calls in a ```xml``` markdown block!!! Failure to meet these requirements will result in your tool call not being executed. This is not optional.
 
 # Available Tools
-{% for tool in tools %}
-## {{ tool.name }}
-{{ tool.description }}
-Parameters:
-{% for name, param in tool.parameters.items() %}
-- {{ name }}: {{ param.description }} {% if param.required %}(required){% endif %}
-{% endfor %}
-Usage:
-<tool_call>
-<{{ tool.name }}>
-{% for name, param in tool.parameters.items() %}<{{ name }}>{{ name }} here</{{ name }}>
-{% endfor %}</{{ tool.name }}>
-</tool_call>
 
-{% endfor %}
+{tools_placeholder}
 
 # Tool Use Guidelines
 
