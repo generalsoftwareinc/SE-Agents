@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 from dotenv import load_dotenv
@@ -8,7 +9,7 @@ from tools import DuckDuckGoSearch, FireCrawlFetchPage
 load_dotenv(override=True)
 
 
-def main():
+async def main():
     GRAY = "\033[90m"
     GREEN = "\033[92m"
     BLUE = "\033[94m"
@@ -41,31 +42,22 @@ def main():
 
         print("\nAssistant: ", end="")
         # Create the generator
-        gen = agent.process_message(user_input)
-
-        # Process responses from the generator
-        try:
-            while True:
-                response = next(gen)
-
-                if response.type == "assistant":
-                    print(response.content, end="", flush=True)
-                elif response.type == "thinking":
-                    print(
-                        f"{GRAY}{response.content}{RESET}",
-                        end="",
-                        flush=True,
-                    )
-                elif response.type == "tool_call":
-                    print(f"\n\n{GREEN}🟡 {response.content}{RESET}\n")
-                elif response.type == "tool_result":
-                    print(f"\n\n{BLUE}🟢 Tool result:\n{response.content}{RESET}\n")
-                elif response.type == "tool_error":
-                    print(f"\n\n{RED}🔴 Tool error:\n{response.content}{RESET}\n")
-        except StopIteration:
-            # Generator is done
-            pass
+        async for response in agent.run_stream(user_input):
+            if response.type == "assistant":
+                print(response.content, end="", flush=True)
+            elif response.type == "thinking":
+                print(
+                    f"{GRAY}{response.content}{RESET}",
+                    end="",
+                    flush=True,
+                )
+            elif response.type == "tool_call":
+                print(f"\n\n{GREEN}🟡 {response.content}{RESET}\n")
+            elif response.type == "tool_result":
+                print(f"\n\n{BLUE}🟢 Tool result:\n{response.content}{RESET}\n")
+            elif response.type == "tool_error":
+                print(f"\n\n{RED}🔴 Tool error:\n{response.content}{RESET}\n")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

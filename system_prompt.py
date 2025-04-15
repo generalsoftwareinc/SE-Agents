@@ -35,7 +35,7 @@ To search the web:
 </web_search_tool>
 </tool_call>
 
-CRITICAL: Always wrap your tool calls in <tool_call></tool_call> tags. Failure to do so will result in your tool call not being executed. This is not optional.
+CRITICAL: Always wrap your tool calls in <tool_call></tool_call> tags. DO NOT WRAP tool_calls in a ```xml``` markdown block!!! Failure to meet these requirements will result in your tool call not being executed. This is not optional.
 
 # Available Tools
 {% for tool in tools %}

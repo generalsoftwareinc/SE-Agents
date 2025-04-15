@@ -1,14 +1,17 @@
-import os
 import re
 import xml.etree.ElementTree as ET
 from pprint import pprint
-from typing import Dict, Generator, List, Optional, Tuple, Union
+from typing import AsyncGenerator, Dict, List, Optional, Union
 
 from openai import Client
 
+from prompts.description import prompt as description_prompt
+from prompts.objective import prompt as objective_prompt
+from prompts.rules import prompt as rules_prompt
+from prompts.tool_calling import prompt as tool_calling_prompt
+from prompts.tool_calling import tools_placeholder
 from schemas import ResponseEvent
-from system_prompt import system_prompt
-from tools import DuckDuckGoSearch, Tool
+from tools import Tool
 
 TOKEN_LIMIT = 80000
 
@@ -16,71 +19,121 @@ TOKEN_LIMIT = 80000
 class Agent:
     def __init__(
         self,
-        api_key: str,
-        model: str,
+        api_key: str = None,
+        model: str = None,
         tools: List[Tool] = None,
         base_url: str = "https://openrouter.ai/api/v1",
         token_limit: int = TOKEN_LIMIT,
+        description: Union[str, None] = None,
+        rules: Union[str, List[str], None] = None,
+        objective: Union[str, List[str], None] = None,
+        add_tool_instrutions: bool = True,
+        add_default_rules: bool = True,
+        add_default_objective: bool = True,
+        initial_messages: Optional[List[Dict[str, str]]] = None,  # <-- New parameter
     ):
         self.token_limit = token_limit
-        self.client = Client(api_key=api_key, base_url=base_url)
+        self.client = (
+            Client(api_key=api_key, base_url=base_url) if api_key and model else None
+        )
         self.model = model
         self.tools = {tool.name: tool for tool in (tools or [])}
+        self._custom_description = description
+        self._custom_rules = rules
+        self._custom_objective = objective
+        self.add_tool_instrutions = add_tool_instrutions
+        self.add_default_rules = add_default_rules
+        self.add_default_objective = add_default_objective
 
         # Replace the tools template with the formatted tools section
         system_message = self._add_system_prompt()
-        # Initialize messages list with the processed system prompt
-        self.messages: List[Dict[str, str]] = [system_message]
+        # Initialize messages list with the processed system prompt and any initial messages
+        if initial_messages:
+            self.messages: List[Dict[str, str]] = [system_message] + initial_messages
+        else:
+            self.messages: List[Dict[str, str]] = [system_message]
         # Print the actual system prompt being used for debugging
         print("--- Initial System Prompt (Processed) ---")
         print(self.messages[0]["content"])
         print("---------------------------------------")
+        if initial_messages:
+            print("--- Initial Conversation Context ---")
+            for msg in self.messages[1:]:
+                print(f"{msg['role'].capitalize()}: {msg['content'][:100]}...")
+            print("------------------------------------")
+
+    def _section_to_str(self, section):
+        if section is None:
+            return ""
+        if isinstance(section, list):
+            return "\n".join(section)
+        return section
 
     def _add_system_prompt(self):
         # Format the tools section of the system prompt
         tools_section = ""
-        for tool in self.tools.values():
-            # Tool header
-            tools_section += f"## {tool.name}\n"
-            tools_section += f"{tool.description}\n"
-            tools_section += "Parameters:\n"
+        if self.add_tool_instrutions:
+            for tool in self.tools.values():
+                # Tool header
+                tools_section += f"## {tool.name}\n"
+                tools_section += f"{tool.description}\n"
+                tools_section += "Parameters:\n"
 
-            # Parameters
-            for name, param in tool.parameters.items():
-                required = "(required)" if param.get("required", False) else ""
-                tools_section += (
-                    f"- {name}: {param.get('description', '')} {required}\n"
-                )
+                # Parameters
+                for name, param in tool.parameters.items():
+                    required = "(required)" if param.get("required", False) else ""
+                    tools_section += (
+                        f"- {name}: {param.get('description', '')} {required}\n"
+                    )
 
-            # Usage example
-            tools_section += "Usage:\n"
-            tools_section += "<tool_call>\n"  # Add opening tool_call tag
-            tools_section += f"<{tool.name}>\n"
-            for name in tool.parameters:
-                tools_section += f"<{name}>{name} here</{name}>\n"
-            tools_section += f"</{tool.name}>\n"
-            tools_section += "</tool_call>\n\n"  # Add closing tool_call tag
+                # Usage example
+                tools_section += "Usage:\n"
+                tools_section += "<tool_call>\n"  # Add opening tool_call tag
+                tools_section += f"<{tool.name}>\n"
+                for name in tool.parameters:
+                    tools_section += f"<{name}>{name} here</{name}>\n"
+                tools_section += f"</{tool.name}>\n"
+                tools_section += "</tool_call>\n\n"  # Add closing tool_call tag
 
         # Define the exact placeholder string from system_prompt.py
-        placeholder = """{% for tool in tools %}
-## {{ tool.name }}
-{{ tool.description }}
-Parameters:
-{% for name, param in tool.parameters.items() %}
-- {{ name }}: {{ param.description }} {% if param.required %}(required){% endif %}
-{% endfor %}
-Usage:
-<tool_call>
-<{{ tool.name }}>
-{% for name, param in tool.parameters.items() %}<{{ name }}>{{ name }} here</{{ name }}>
-{% endfor %}</{{ tool.name }}>
-</tool_call>
+        placeholder = tools_placeholder
 
-{% endfor %}"""
+        # Description section
+        if self._custom_description is not None:
+            description_section = self._custom_description
+        else:
+            description_section = description_prompt
+
+        # Rules section
+        if self._custom_rules is not None:
+            rules_section = self._section_to_str(self._custom_rules)
+        elif self.add_default_rules:
+            rules_section = rules_prompt
+        else:
+            rules_section = ""
+
+        # Objective section
+        if self._custom_objective is not None:
+            objective_section = self._section_to_str(self._custom_objective)
+        elif self.add_default_objective:
+            objective_section = objective_prompt
+        else:
+            objective_section = ""
+
+        # Tool calling instructions
+        tool_calling_section = tool_calling_prompt if self.add_tool_instrutions else ""
+
+        # Compose the full prompt
+        full_prompt = (
+            description_section
+            + ("\n" + tool_calling_section if tool_calling_section else "")
+            + ("\n" + rules_section if rules_section else "")
+            + ("\n" + objective_section if objective_section else "")
+        )
 
         return {
             "role": "system",
-            "content": system_prompt.replace(placeholder, tools_section),
+            "content": full_prompt.replace(placeholder, tools_section),
         }
 
     def _parse_tool_call(
@@ -187,69 +240,18 @@ Usage:
         return sum(len(message["content"].split()) for message in self.messages)
 
     def _truncate_context_window(self, verbosity=False):
-        while self.total_token_count > self.token_limit:
+        # Only pop messages (except system and last) until under token limit.
+        while self.total_token_count > self.token_limit and len(self.messages) > 2:
             if verbosity:
                 print(
-                    f"==={self.total_token_count} > {self.token_limit}, Reducing token count by truncating the longest messages==="
+                    f"==={self.total_token_count} > {self.token_limit}, removing oldest message (except system and last)==="
                 )
-
-            tpm = [len(msg["content"].split()) for msg in self.messages]
-            median_token_count = sorted(tpm)[len(tpm) // 2]
-
-            def truncate_message_content(content: str) -> str:
-
-                tokens = content.split()
-
-                if len(tokens) <= median_token_count:
-                    return content
-
-                percent = 20
-                first_x_percent = tokens[: max(1, len(tokens) // percent)]
-                last_x_percent = tokens[-max(1, len(tokens) // percent) :]
-                return " ".join(first_x_percent + ["..."] + last_x_percent)
-
-            self.messages = [
-                {
-                    **msg,
-                    "content": truncate_message_content(msg["content"]),
-                }
-                for msg in self.messages
-            ]
-
-            if self.total_token_count > self.token_limit:
-                if len(self.messages) <= 2:
-                    print(
-                        "===Unable to truncate, context window contains <= 2 messages==="
-                    )
-                    break
-                if verbosity:
-                    print(
-                        f"==={self.total_token_count} > {self.token_limit}, Reducing token count by eliminating older messages==="
-                    )
-
-                conversation_messages = self.messages[1:]
-                user_messages = [msg for msg in self.messages if msg.role == "user"]
-                latest_user_message = user_messages[-1]
-                conversation_messages = [
-                    msg
-                    for msg in self.conversation_messages
-                    if msg.role != "user" or msg == latest_user_message
-                ]
-
-                if conversation_messages[0]["role"] != "user":
-                    conversation_messages.pop(0)
-                else:
-                    conversation_messages.pop(1)
-
-                self.messages = [
-                    self._add_system_prompt(),
-                    *conversation_messages,
-                ]
-
+            # Always preserve the first (system) and last message
+            del self.messages[1]
         if verbosity:
             print(f"===CONTEXT WINDOW TOKEN COUNT: {self.total_token_count}===")
 
-    def process_message(self, user_input: str) -> Generator[ResponseEvent, None, None]:
+    async def run_stream(self, user_input: str) -> AsyncGenerator[ResponseEvent, None]:
         """Process a user message and yield responses (assistant messages and tool results).
 
         This method handles the conversation loop, including tool calls and user interactions.
