@@ -124,23 +124,52 @@ class ExaSearchContent(Tool):
                     "description": "Search query",
                     "required": True,
                 },
-                "include_domains":{
+                "include_domains": {
                     "type": "List[string]",
-                    "description": "List of domains to include in the search.",
-                    "required": False
-                }
+                    "description": "List of comma-separated domains to include in the search.",
+                    "required": False,
+                },
+                "exclude_domains": {
+                    "type": "List[string]",
+                    "description": "List of comma-separated domains to exclude from the search.",
+                    "required": False,
+                },
             },
         )
 
         self.client = Exa(api_key=api_key)
 
+    def _convert_to_list(self, value) -> List[str]:
+        """
+        Converts a comma-separated string or a list of strings to a list of strings.
+        """
+        if isinstance(value, str):
+            return [d.strip() for d in value.split(",")]
+        elif isinstance(value, list) and all(isinstance(d, str) for d in value):
+            return value
+        else:
+            raise ValueError("Value must be a list of strings or a comma-separated string.")
+
     def execute(self, **kwargs) -> str:
         query = kwargs.get("query")
+        include_domains = kwargs.get("include_domains")
+        exclude_domains = kwargs.get("exclude_domains")
+
+        try:
+            include_domains = self._convert_to_list(include_domains) if include_domains else None
+            exclude_domains = self._convert_to_list(exclude_domains) if exclude_domains else None
+        except ValueError as e:
+            return f"Error: {str(e)}"
+
+        print(include_domains, exclude_domains)
+
         if not query:
             return "Error: No query provided"
 
         results = []
-
-        for r in self.client.search_and_contents(query=query, num_results=3).results:
+        separator = "\n==============================================================================\n"
+        for r in self.client.search_and_contents(query=query, num_results=3, include_domains=include_domains, exclude_domains=exclude_domains).results:
             results.append(f"- {r.title}\n  URL: {r.url}\n  Body: {r.text}")
-        return "Search results:\n" + "\n\n".join(results)
+            # print(f"=== Exa Consulted {r.url} ===")
+            # time.sleep(3)
+        return f"Search results:{separator}" + separator.join(results)
