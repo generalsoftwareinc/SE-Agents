@@ -1,11 +1,7 @@
-import os
-from typing import Dict, List
+from typing import List
 
-from dotenv import load_dotenv
 from duckduckgo_search import DDGS
 from firecrawl import FirecrawlApp
-
-load_dotenv()
 
 
 class Tool:
