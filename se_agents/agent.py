@@ -51,7 +51,7 @@ class Agent:
         )
 
         # Tool config
-        self.tools = {tool.name: tool for tool in (tools or [])}
+        self.tools = tools or []
 
         # Prompt config
         self._custom_description = description
@@ -89,7 +89,7 @@ class Agent:
         # Format the tools section of the system prompt
         tools_section = ""
         if self.add_tool_instrutions:
-            for tool in self.tools.values():
+            for tool in self.tools:
                 # Tool header
                 tools_section += f"## {tool.name}\n"
                 tools_section += f"{tool.description}\n"
@@ -198,7 +198,7 @@ class Agent:
             return None, None
 
         # Use the extracted tool_name and tool_content
-        tool = self.tools.get(tool_name)
+        tool = self._get_tool_by_name(tool_name)
         if not tool:
             return None, f"Unknown tool: {tool_name}"
 
@@ -236,7 +236,7 @@ class Agent:
                 - result: The tool execution result or error message
                 - success: True if execution was successful, False if there were errors
         """
-        tool = self.tools.get(tool_name)
+        tool = self._get_tool_by_name(tool_name)
         if not tool:
             return f"Unknown tool: {tool_name}", False
 
@@ -394,7 +394,7 @@ class Agent:
 
                 history_message = f"<tool_result>\n{tool_result}\n</tool_result>"
                 if not success:
-                    tool = self.tools.get(tool_name)
+                    tool = self._get_tool_by_name(tool_name)
                     if tool:
                         param_info = "\n".join(
                             [
@@ -411,3 +411,10 @@ class Agent:
 
             else:
                 continue_conversation = False
+
+    def _get_tool_by_name(self, tool_name: str) -> Optional[Tool]:
+        """Return the tool with the given name from self.tools, or None if not found."""
+        for tool in self.tools:
+            if tool.name == tool_name:
+                return tool
+        return None
