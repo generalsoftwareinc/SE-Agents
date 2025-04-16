@@ -174,14 +174,15 @@ class Agent:
 
     def _parse_tool_call(
         self, message: str
-    ) -> tuple[Optional[Dict[str, Dict[str, str]]], Optional[str]]:
+    ) -> tuple[Optional[Dict[str, Dict[str, str]]], Optional[str], Optional[str]]:
         """Parse XML-formatted tool calls from the assistant's message.
         Handles tool calls both directly in the message and inside code blocks.
 
         Returns:
-            tuple: (tool_call_dict, error_message)
+            tuple: (tool_call_dict, error_message, raw_tool_call_xml)
                 - tool_call_dict: Dictionary with tool name as key and parameters as values, or None if parsing failed
                 - error_message: Error message if parsing failed, or None if successful
+                - raw_tool_call_xml: The raw XML string of the tool call, or None if not found/parsed
         """
         # Look for tool calls inside code blocks first
         code_block_match = re.search(
@@ -209,13 +210,18 @@ class Agent:
             if tool_name_match:
                 tool_name = tool_name_match.group(1)
                 tool_content = tool_name_match.group(2)
+                raw_tool_call_xml = tool_call_match.group(
+                    0
+                )  # Capture the full <tool_call>...</tool_call>
             else:
                 return (
                     None,
                     "Malformed tool call format. Please use the format: <tool_call><tool_name>...</tool_name></tool_call>",
+                    None,
                 )
         else:
-            return None, None
+            # No <tool_call> tag found
+            return None, None, None
 
         # Use the extracted tool_name and tool_content
         tool = self._get_tool_by_name(tool_name)
@@ -234,6 +240,7 @@ class Agent:
                 return (
                     None,
                     f"Unexpected parameters in tool call for {tool_name}. Expected: {', '.join(expected_params)}",
+                    raw_tool_call_xml,
                 )
 
             params = {
@@ -244,9 +251,10 @@ class Agent:
             return (
                 None,
                 f"Malformed XML in tool call: {str(e)} \n Please check the format.",
+                raw_tool_call_xml,
             )
 
-        return {tool_name: params}, None
+        return {tool_name: params}, None, raw_tool_call_xml
 
     def _execute_tool(self, tool_name: str, params: Dict[str, str]) -> tuple[str, bool]:
         """Execute a tool with the given parameters and return the result and success status.
@@ -304,7 +312,11 @@ class Agent:
             )
 
             full_response = ""
-            tool_call, error_message = None, None
+            tool_call, error_message, raw_tool_xml = (
+                None,
+                None,
+                None,
+            )  # Add raw_tool_xml
             halted = False
             tag_found = False
             thinking_found = False
@@ -345,9 +357,11 @@ class Agent:
                             if tag_found:
                                 if "</tool_call>" in full_response and not tool_found:
                                     tag_found = False
-                                    tool_call, error_message = self._parse_tool_call(
-                                        full_response
-                                    )
+                                    (
+                                        tool_call,
+                                        error_message,
+                                        raw_tool_xml,
+                                    ) = self._parse_tool_call(full_response)
 
                                     if error_message:
                                         halted = False
@@ -363,7 +377,7 @@ class Agent:
                                         halted_tokens = ""
                                         yield ResponseEvent(
                                             type="tool_call",
-                                            content=str(tool_call),
+                                            content=raw_tool_xml,  # Use raw XML here
                                         )
 
                                 if (
@@ -408,11 +422,11 @@ class Agent:
                 tool_result, success = self._execute_tool(tool_name, tool_params)
 
                 if success:
-                    yield ResponseEvent(type="tool_result", content=tool_result)
+                    yield ResponseEvent(type="tool_response", content=tool_result)
                 else:
                     yield ResponseEvent(type="tool_error", content=tool_result)
 
-                history_message = f"<tool_result>\n{tool_result}\n</tool_result>"
+                history_message = f"<tool_response>\n{tool_result}\n</tool_response>"
                 if not success:
                     tool = self._get_tool_by_name(tool_name)
                     if tool:

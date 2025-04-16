@@ -26,17 +26,25 @@ async def main():
         return
 
     agent = Agent(
-        api_key=os.getenv("OPENROUTER_API_KEY"),
+        api_key=api_key,
         model=model,
         tools=[DuckDuckGoSearch(), FireCrawlFetchPage(firecrawl_key)],
-        initial_messages=[
-            {
-                "role": "user",
-                "content": """You are a helpful assistant that can perform web searches and fetch pages using Firecrawl. You can also analyze files and provide insights.
-                """,
-            },
-        ],
+        # initial_messages=[
+        #     {
+        #         "role": "user",
+        #         "content": """You are a helpful assistant that can perform web searches and fetch pages using Firecrawl. You can also analyze files and provide insights.
+        #         """,
+        #     },
+        # ],
         additional_context=f"Current system time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+    )
+
+    agent.messages.append(
+        {
+            "role": "user",
+            "content": """You are a helpful assistant that can perform web searches and fetch pages using Firecrawl.
+            """,
+        },
     )
 
     # print(agent.messages[0]["content"])
@@ -62,8 +70,8 @@ async def main():
                 )
             elif response.type == "tool_call":
                 print(f"\n\n{GREEN}🟡 {response.content}{RESET}\n")
-            elif response.type == "tool_result":
-                print(f"\n\n{BLUE}🟢 Tool result:\n{response.content}{RESET}\n")
+            elif response.type == "tool_response":
+                print(f"\n\n{BLUE}🟢 Tool response:\n{response.content}{RESET}\n")
             elif response.type == "tool_error":
                 print(f"\n\n{RED}🔴 Tool error:\n{response.content}{RESET}\n")
 
