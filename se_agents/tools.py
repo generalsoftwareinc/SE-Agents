@@ -134,6 +134,16 @@ class ExaSearchContent(Tool):
                     "description": "List of comma-separated domains to exclude from the search.",
                     "required": False,
                 },
+                "start_published_date": {
+                    "type": "string",
+                    "description": "Start publication date in ISO format (like 2025-04-08T04:00:00.000Z).",
+                    "required": False,
+                },
+                "end_published_date": {
+                    "type": "string",
+                    "description": "End publication date in ISO format (like 2025-04-08T04:00:00.000Z).",
+                    "required": False,
+                },
             },
         )
 
@@ -154,6 +164,8 @@ class ExaSearchContent(Tool):
         query = kwargs.get("query")
         include_domains = kwargs.get("include_domains")
         exclude_domains = kwargs.get("exclude_domains")
+        start_published_date = kwargs.get("start_published_date")
+        end_published_date = kwargs.get("end_published_date")
 
         try:
             include_domains = self._convert_to_list(include_domains) if include_domains else None
@@ -161,15 +173,18 @@ class ExaSearchContent(Tool):
         except ValueError as e:
             return f"Error: {str(e)}"
 
-        print(include_domains, exclude_domains)
-
         if not query:
             return "Error: No query provided"
 
         results = []
         separator = "\n==============================================================================\n"
-        for r in self.client.search_and_contents(query=query, num_results=3, include_domains=include_domains, exclude_domains=exclude_domains).results:
+        for r in self.client.search_and_contents(
+            query=query,
+            num_results=3,
+            include_domains=include_domains,
+            exclude_domains=exclude_domains,
+            start_published_date=start_published_date,
+            end_published_date=end_published_date,
+        ).results:
             results.append(f"- {r.title}\n  URL: {r.url}\n  Body: {r.text}")
-            # print(f"=== Exa Consulted {r.url} ===")
-            # time.sleep(3)
         return f"Search results:{separator}" + separator.join(results)
