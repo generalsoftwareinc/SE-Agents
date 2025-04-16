@@ -7,7 +7,7 @@ from email.mime import base
 from dotenv import load_dotenv
 
 from se_agents.agent import Agent
-from se_agents.tools import DuckDuckGoSearch, ExaSearchContent, FireCrawlFetchPage
+from se_agents.tools import DuckDuckGoSearch, FireCrawlFetchPage, ExaSearchContent
 
 load_dotenv(override=True)
 
