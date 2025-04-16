@@ -5,13 +5,13 @@ from typing import AsyncGenerator, Dict, List, Optional, Union
 
 from openai import Client
 
-from prompts.description import prompt as description_prompt
-from prompts.objective import prompt as objective_prompt
-from prompts.rules import prompt as rules_prompt
-from prompts.tool_calling import prompt as tool_calling_prompt
-from prompts.tool_calling import tools_placeholder
-from schemas import ResponseEvent
-from tools import Tool
+from se_agents.prompts.description import prompt as description_prompt
+from se_agents.prompts.objective import prompt as objective_prompt
+from se_agents.prompts.rules import prompt as rules_prompt
+from se_agents.prompts.tool_calling import prompt as tool_calling_prompt
+from se_agents.prompts.tool_calling import tools_placeholder
+from se_agents.schemas import ResponseEvent
+from se_agents.tools import Tool
 
 TOKEN_LIMIT = 80000
 
