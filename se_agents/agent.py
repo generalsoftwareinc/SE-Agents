@@ -5,6 +5,7 @@ from typing import AsyncGenerator, Dict, List, Optional, Union
 
 from openai import Client
 
+from se_agents.prompts.additional_context import prompt as additional_context_prompt
 from se_agents.prompts.custom_instructions import prompt as custom_instructions_prompt
 from se_agents.prompts.description import prompt as description_prompt
 from se_agents.prompts.objective import prompt as objective_prompt
@@ -34,6 +35,7 @@ class Agent:
         rules: Union[str, List[str], None] = None,
         objective: Union[str, List[str], None] = None,
         instructions: Union[str, List[str], None] = None,
+        additional_context: Union[str, List[str], None] = None,
         add_tool_instrutions: bool = True,
         add_default_rules: bool = True,
         add_default_objective: bool = True,
@@ -63,6 +65,7 @@ class Agent:
         self.add_default_rules = add_default_rules
         self.add_default_objective = add_default_objective
         self._custom_instructions = instructions
+        self._additional_context = additional_context
 
         # Message config
         system_message = self._add_system_prompt()
@@ -149,6 +152,13 @@ class Agent:
             + ("\n" + rules_section if rules_section else "")
             + ("\n" + objective_section if objective_section else "")
         )
+
+        # Add additional context if provided
+        if self._additional_context is not None:
+            context_str = self._section_to_str(self._additional_context)
+            full_prompt += "\n" + additional_context_prompt.replace(
+                "{additional_context}", context_str
+            )
 
         # Add custom instructions if provided
         if self._custom_instructions is not None:

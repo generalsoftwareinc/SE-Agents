@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import os
 
 from dotenv import load_dotenv
@@ -28,6 +29,14 @@ async def main():
         api_key=os.getenv("OPENROUTER_API_KEY"),
         model=model,
         tools=[DuckDuckGoSearch(), FireCrawlFetchPage(firecrawl_key)],
+        initial_messages=[
+            {
+                "role": "user",
+                "content": """You are a helpful assistant that can perform web searches and fetch pages using Firecrawl. You can also analyze files and provide insights.
+                """,
+            },
+        ],
+        additional_context=f"Current system time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
     )
 
     # print(agent.messages[0]["content"])
