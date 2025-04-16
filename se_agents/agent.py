@@ -5,6 +5,7 @@ from typing import AsyncGenerator, Dict, List, Optional, Union
 
 from openai import Client
 
+from se_agents.prompts.custom_instructions import prompt as custom_instructions_prompt
 from se_agents.prompts.description import prompt as description_prompt
 from se_agents.prompts.objective import prompt as objective_prompt
 from se_agents.prompts.rules import prompt as rules_prompt
@@ -32,6 +33,7 @@ class Agent:
         description: Union[str, None] = None,
         rules: Union[str, List[str], None] = None,
         objective: Union[str, List[str], None] = None,
+        instructions: Union[str, List[str], None] = None,
         add_tool_instrutions: bool = True,
         add_default_rules: bool = True,
         add_default_objective: bool = True,
@@ -60,6 +62,7 @@ class Agent:
         self.add_tool_instrutions = add_tool_instrutions
         self.add_default_rules = add_default_rules
         self.add_default_objective = add_default_objective
+        self._custom_instructions = instructions
 
         # Message config
         system_message = self._add_system_prompt()
@@ -146,6 +149,13 @@ class Agent:
             + ("\n" + rules_section if rules_section else "")
             + ("\n" + objective_section if objective_section else "")
         )
+
+        # Add custom instructions if provided
+        if self._custom_instructions is not None:
+            instructions_str = self._section_to_str(self._custom_instructions)
+            full_prompt += "\n" + custom_instructions_prompt.replace(
+                "{custom_instructions}", instructions_str
+            )
 
         return {
             "role": "system",
