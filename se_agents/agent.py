@@ -19,25 +19,41 @@ TOKEN_LIMIT = 80000
 class Agent:
     def __init__(
         self,
+        # Core agent config
+        name: str = None,
+        token_limit: int = TOKEN_LIMIT,
+        # OpenAI config
         api_key: str = None,
         model: str = None,
-        tools: List[Tool] = None,
         base_url: str = "https://openrouter.ai/api/v1",
-        token_limit: int = TOKEN_LIMIT,
+        # Tool config
+        tools: List[Tool] = None,
+        # Prompt config
         description: Union[str, None] = None,
         rules: Union[str, List[str], None] = None,
         objective: Union[str, List[str], None] = None,
         add_tool_instrutions: bool = True,
         add_default_rules: bool = True,
         add_default_objective: bool = True,
-        initial_messages: Optional[List[Dict[str, str]]] = None,  # <-- New parameter
+        # Message config
+        initial_messages: Optional[List[Dict[str, str]]] = None,
     ):
+        # Core agent config
+        self.name = name
         self.token_limit = token_limit
+
+        # OpenAI config
+        self.api_key = api_key
+        self.model = model
+        self.base_url = base_url
         self.client = (
             Client(api_key=api_key, base_url=base_url) if api_key and model else None
         )
-        self.model = model
+
+        # Tool config
         self.tools = {tool.name: tool for tool in (tools or [])}
+
+        # Prompt config
         self._custom_description = description
         self._custom_rules = rules
         self._custom_objective = objective
@@ -45,14 +61,14 @@ class Agent:
         self.add_default_rules = add_default_rules
         self.add_default_objective = add_default_objective
 
-        # Replace the tools template with the formatted tools section
+        # Message config
         system_message = self._add_system_prompt()
-        # Initialize messages list with the processed system prompt and any initial messages
         if initial_messages:
             self.messages: List[Dict[str, str]] = [system_message] + initial_messages
         else:
             self.messages: List[Dict[str, str]] = [system_message]
-        # Print the actual system prompt being used for debugging
+
+        # Debug output
         print("--- Initial System Prompt (Processed) ---")
         print(self.messages[0]["content"])
         print("---------------------------------------")
