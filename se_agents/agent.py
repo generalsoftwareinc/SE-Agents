@@ -228,7 +228,8 @@ class Agent:
         # Use the extracted tool_name and tool_content
         tool = self._get_tool_by_name(tool_name)
         if not tool:
-            return None, f"Unknown tool: {tool_name}"
+            # Add raw_tool_call_xml here as the third return value
+            return None, f"Unknown tool: {tool_name}", raw_tool_call_xml
 
         params = {}
         try:
@@ -252,7 +253,7 @@ class Agent:
         except ET.ParseError as e:
             return (
                 None,
-                f"Malformed XML in tool call: {str(e)} \n Please check the format.",
+                f"Malformed XML in tool call: {str(e)} \nPlease check the format.",
                 raw_tool_call_xml,
             )
 
@@ -268,11 +269,12 @@ class Agent:
         """
         tool = self._get_tool_by_name(tool_name)
         if not tool:
+            # Revert the previous incorrect change here
             return f"Unknown tool: {tool_name}", False
 
         errors = tool.validate_parameters(params)
         if errors:
-            return "Error: " + "\n".join(errors), False
+            return "\n".join(errors), False
 
         try:
             result = tool.execute(**params)
@@ -370,7 +372,12 @@ class Agent:
                                         tokens_since_halted = 0
                                         halted_tokens = ""
                                         yield ResponseEvent(
-                                            type="tool_error", content=error_message
+                                            type="tool_error",
+                                            content=(
+                                                f"<tool_error>{content}</tool_error>"
+                                                if self.wrap_response_chunks
+                                                else content
+                                            ),
                                         )
                                     if tool_call:
                                         tool_found = True
@@ -410,14 +417,13 @@ class Agent:
                 yield ResponseEvent(type="response", content="\n")
 
             if full_response and full_response.strip():
-                self.messages.append({"role": "response", "content": full_response})
+                self.messages.append({"role": "assistant", "content": full_response})
             else:
                 continue_conversation = False
                 continue
 
             if error_message:
                 feedback = f"Tool call error: {error_message}\n\nPlease try again with the correct format."
-                yield ResponseEvent(type="tool_error", content=feedback)
                 self.messages.append({"role": "user", "content": feedback})
                 continue_conversation = True
 
