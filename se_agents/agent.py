@@ -41,6 +41,7 @@ class Agent:
         add_default_objective: bool = True,
         # Message config
         initial_messages: Optional[List[Dict[str, str]]] = None,
+        wrap_response_chunks: bool = False,
     ):
         # Core agent config
         self.name = name
@@ -66,6 +67,7 @@ class Agent:
         self.add_default_objective = add_default_objective
         self._custom_instructions = instructions
         self._additional_context = additional_context
+        self.wrap_response_chunks = wrap_response_chunks
 
         # Message config
         system_message = self._add_system_prompt()
@@ -344,7 +346,7 @@ class Agent:
                                 content = halted_tokens
                                 tokens_since_halted = 0
                                 yield ResponseEvent(
-                                    type="assistant",
+                                    type="response",
                                     content=halted_tokens,
                                 )
                                 halted_tokens = ""
@@ -396,15 +398,19 @@ class Agent:
 
                         else:
                             yield ResponseEvent(
-                                type="assistant",
-                                content=content,
+                                type="response",
+                                content=(
+                                    f"<response>{content}</response>"
+                                    if self.wrap_response_chunks
+                                    else content
+                                ),
                             )
 
             if full_response.strip() and not re.search(r"</[^>]+>\s*$", full_response):
-                yield ResponseEvent(type="assistant", content="\n")
+                yield ResponseEvent(type="response", content="\n")
 
             if full_response and full_response.strip():
-                self.messages.append({"role": "assistant", "content": full_response})
+                self.messages.append({"role": "response", "content": full_response})
             else:
                 continue_conversation = False
                 continue

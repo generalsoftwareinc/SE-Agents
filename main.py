@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import os
+import re
 
 from dotenv import load_dotenv
 
@@ -37,6 +38,7 @@ async def main():
         #     },
         # ],
         additional_context=f"Current system time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        wrap_response_chunks=True,
     )
 
     agent.messages.append(
@@ -60,8 +62,15 @@ async def main():
         print("\nAssistant: ", end="")
         # Create the generator
         async for response in agent.run_stream(user_input):
-            if response.type == "assistant":
-                print(response.content, end="", flush=True)
+            if response.type == "response":
+                content = re.search(
+                    r"<response>(.*?)</response>", response.content, re.DOTALL
+                )
+                print(
+                    content.group(1) if content else response.content,
+                    end="",
+                    flush=True,
+                )
             elif response.type == "thinking":
                 print(
                     f"{GRAY}{response.content}{RESET}",
