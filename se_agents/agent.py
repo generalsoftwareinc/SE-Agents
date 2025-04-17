@@ -42,10 +42,15 @@ class Agent:
         # Message config
         initial_messages: Optional[List[Dict[str, str]]] = None,
         wrap_response_chunks: bool = False,
+        # Verbose config
+        verbose: bool = False,
     ):
         # Core agent config
         self.name = name
         self.token_limit = token_limit
+
+        # Verbose config
+        self.verbose = verbose
 
         # OpenAI config
         self.api_key = api_key
@@ -77,14 +82,15 @@ class Agent:
             self.messages: List[Dict[str, str]] = [system_message]
 
         # Debug output
-        print("--- Initial System Prompt (Processed) ---")
-        print(self.messages[0]["content"])
-        print("---------------------------------------")
-        if initial_messages:
-            print("--- Initial Conversation Context ---")
-            for msg in self.messages[1:]:
-                print(f"{msg['role'].capitalize()}: {msg['content'][:100]}...")
-            print("------------------------------------")
+        if self.verbose:
+            print("--- Initial System Prompt (Processed) ---")
+            print(self.messages[0]["content"])
+            print("---------------------------------------")
+            if initial_messages:
+                print("--- Initial Conversation Context ---")
+                for msg in self.messages[1:]:
+                    print(f"{msg['role'].capitalize()}: {msg['content'][:100]}...")
+                print("------------------------------------")
 
     def _section_to_str(self, section):
         if section is None:
@@ -287,16 +293,16 @@ class Agent:
         """Calculate the total number of words in the content of all messages."""
         return sum(len(message["content"].split()) for message in self.messages)
 
-    def _truncate_context_window(self, verbosity=False):
+    def _truncate_context_window(self):
         # Only pop messages (except system and last) until under token limit.
         while self.total_token_count > self.token_limit and len(self.messages) > 2:
-            if verbosity:
+            if self.verbose:
                 print(
                     f"==={self.total_token_count} > {self.token_limit}, removing oldest message (except system and last)==="
                 )
             # Always preserve the first (system) and last message
             del self.messages[1]
-        if verbosity:
+        if self.verbose:
             print(f"===CONTEXT WINDOW TOKEN COUNT: {self.total_token_count}===")
 
     async def run_stream(self, user_input: str) -> AsyncGenerator[ResponseEvent, None]:
@@ -310,7 +316,7 @@ class Agent:
         continue_conversation = True
 
         while continue_conversation:
-            self._truncate_context_window(verbosity=True)
+            self._truncate_context_window()
             response = self.client.chat.completions.create(
                 model=self.model, messages=self.messages, stream=True
             )
