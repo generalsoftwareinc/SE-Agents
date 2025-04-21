@@ -25,7 +25,7 @@ class Agent:
         # OpenAI config
         api_key: str = None,
         model: str = None,
-        base_url: str = "https://openrouter.ai/api/v1",
+        base_url: str = None,
         # Tool config
         tools: List[Tool] = None,
         # Prompt config
@@ -54,9 +54,7 @@ class Agent:
         self.api_key = api_key
         self.model = model
         self.base_url = base_url
-        self.client = (
-            Client(api_key=api_key, base_url=base_url) if api_key and model else None
-        )
+        self.client = Client(api_key=api_key, base_url=base_url)
 
         # Tool config
         self.tools = tools or []

@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import os
 import re
+from email.mime import base
 
 from dotenv import load_dotenv
 
@@ -9,6 +10,27 @@ from se_agents.agent import Agent
 from se_agents.tools import DuckDuckGoSearch, FireCrawlFetchPage
 
 load_dotenv(override=True)
+
+
+rules = """
+1. Your knowledge is limited to the information available up to April 2024.
+2. You must use your tools to access up-to-date information from the web and provide accurate information to aid the users research goals
+4. You must ALWAYS use your tools to verify the information you provide. If you are unsure about something, you must use your tools to find the answer.
+5. Write a well-formatted answer that's optimized for readability:
+   - Separate your answer into logical sections using level 2 headers (##) for sections and bolding (**) for subsections.
+   - Incorporate a variety of lists, headers, and text to make the answer visually appealing.
+   - Never start your answer with a header.
+   - Use lists, bullet points, and other enumeration devices only sparingly, preferring other formatting methods like headers. Only use lists when there is a clear enumeration to be made
+   - Only use numbered lists when you need to rank items. Otherwise, use bullet points.
+   - Never nest lists or mix ordered and unordered lists.
+   - When comparing items, use a markdown table instead of a list.
+   - Bold specific words for emphasis.
+   - Use markdown code blocks for code snippets, including the language for syntax highlighting.
+   - Wrap all math expressions in LaTeX using double dollar signs ($$). For example: $$x^4 = x - 3$$
+   - You may include quotes in markdown to supplement the answer
+6. Be concise in your answer. Skip any preamble and provide the answer directly
+
+"""
 
 
 async def main():
@@ -19,15 +41,15 @@ async def main():
     RESET = "\033[0m"
 
     api_key = os.getenv("OPENROUTER_API_KEY")
+    # api_key = None
     model = os.getenv("OPENROUTER_MODEL")
     firecrawl_key = os.getenv("FIRECRAWL_API_KEY")
-
-    if not api_key:
-        print("Error: OPENROUTER_API_KEY environment variable not set")
-        return
+    base_url = os.getenv("OPENROUTER_BASE_URL")
+    # base_url = None
 
     agent = Agent(
         api_key=api_key,
+        base_url=base_url,
         model=model,
         tools=[DuckDuckGoSearch(), FireCrawlFetchPage(firecrawl_key)],
         # initial_messages=[
@@ -40,6 +62,8 @@ async def main():
         additional_context=f"Current system time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         wrap_response_chunks=True,
         verbose=True,
+        rules=rules,
+        add_default_rules=False,
     )
 
     agent.messages.append(
