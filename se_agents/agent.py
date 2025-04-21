@@ -6,13 +6,11 @@ from typing import AsyncGenerator, Dict, List, Optional, Union
 from openai import Client
 
 from se_agents.prompts.additional_context import prompt as additional_context_prompt
-from se_agents.prompts.custom_instructions import prompt as custom_instructions_prompt
 from se_agents.prompts.description import prompt as description_prompt
-from se_agents.prompts.objective import prompt as objective_prompt
-from se_agents.prompts.rules import prompt as rules_prompt
 from se_agents.prompts.tool_calling import prompt as tool_calling_prompt
 from se_agents.prompts.tool_calling import tools_placeholder
 from se_agents.schemas import ResponseEvent
+from se_agents.system_prompt import build_system_prompt
 from se_agents.tools import Tool
 
 TOKEN_LIMIT = 80000
@@ -100,84 +98,20 @@ class Agent:
         return section
 
     def _add_system_prompt(self):
-        # Format the tools section of the system prompt
-        tools_section = ""
-        if self.add_tool_instrutions:
-            for tool in self.tools:
-                # Tool header
-                tools_section += f"## {tool.name}\n"
-                tools_section += f"{tool.description}\n"
-                tools_section += "Parameters:\n"
-
-                # Parameters
-                for name, param in tool.parameters.items():
-                    required = "(required)" if param.get("required", False) else ""
-                    tools_section += (
-                        f"- {name}: {param.get('description', '')} {required}\n"
-                    )
-
-                # Usage example
-                tools_section += "Usage:\n"
-                tools_section += "<tool_call>\n"  # Add opening tool_call tag
-                tools_section += f"<{tool.name}>\n"
-                for name in tool.parameters:
-                    tools_section += f"<{name}>{name} here</{name}>\n"
-                tools_section += f"</{tool.name}>\n"
-                tools_section += "</tool_call>\n\n"  # Add closing tool_call tag
-
-        # Define the exact placeholder string from system_prompt.py
-        placeholder = tools_placeholder
-
-        # Description section
-        if self._custom_description is not None:
-            description_section = self._custom_description
-        else:
-            description_section = description_prompt
-
-        # Rules section
-        if self._custom_rules is not None:
-            rules_section = self._section_to_str(self._custom_rules)
-        elif self.add_default_rules:
-            rules_section = rules_prompt
-        else:
-            rules_section = ""
-
-        # Objective section
-        if self._custom_objective is not None:
-            objective_section = self._section_to_str(self._custom_objective)
-        elif self.add_default_objective:
-            objective_section = objective_prompt
-        else:
-            objective_section = ""
-
-        # Tool calling instructions
-        tool_calling_section = tool_calling_prompt if self.add_tool_instrutions else ""
-
-        # Compose the full prompt
-        full_prompt = (
-            description_section
-            + ("\n" + tool_calling_section if tool_calling_section else "")
-            + ("\n" + rules_section if rules_section else "")
-            + ("\n" + objective_section if objective_section else "")
+        full_prompt = build_system_prompt(
+            description=self._custom_description,
+            add_tool_instructions=self.add_tool_instrutions,
+            tools=self.tools,
+            custom_rules=self._custom_rules,
+            add_default_rules=self.add_default_rules,
+            custom_objective=self._custom_objective,
+            add_default_objective=self.add_default_objective,
+            additional_context=self._additional_context,
+            custom_instructions=self._custom_instructions,
         )
-
-        # Add additional context if provided
-        if self._additional_context is not None:
-            context_str = self._section_to_str(self._additional_context)
-            full_prompt += "\n" + additional_context_prompt.replace(
-                "{additional_context}", context_str
-            )
-
-        # Add custom instructions if provided
-        if self._custom_instructions is not None:
-            instructions_str = self._section_to_str(self._custom_instructions)
-            full_prompt += "\n" + custom_instructions_prompt.replace(
-                "{custom_instructions}", instructions_str
-            )
-
         return {
             "role": "system",
-            "content": full_prompt.replace(placeholder, tools_section),
+            "content": full_prompt,
         }
 
     def _parse_tool_call(

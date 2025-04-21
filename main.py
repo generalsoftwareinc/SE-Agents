@@ -39,6 +39,7 @@ async def main():
         # ],
         additional_context=f"Current system time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         wrap_response_chunks=True,
+        verbose=True,
     )
 
     agent.messages.append(

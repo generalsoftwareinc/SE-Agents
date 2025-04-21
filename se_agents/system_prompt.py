@@ -1,131 +1,147 @@
-system_prompt = """
-You are SocIA, a highly skilled autonomous agent and AI assistant.
+from se_agents.prompts.additional_context import prompt as additional_context_prompt
+from se_agents.prompts.custom_instructions import prompt as custom_instructions_template
+from se_agents.prompts.description import prompt as description_prompt
+from se_agents.prompts.objective import prompt as objective_prompt
+from se_agents.prompts.rules import prompt as rules_prompt
+from se_agents.prompts.tool_calling import prompt as tool_calling_prompt
 
-====
 
-TOOL USE
+def insert_custom_instructions(section_prompt, custom_instructions):
+    """
+    Inserts custom instructions before the '====' delimiter in the section prompt.
+    If no delimiter is found, appends custom instructions at the end.
+    """
+    delimiter = "===="
+    if custom_instructions:
+        idx = section_prompt.find(delimiter)
+        if idx != -1:
+            before = section_prompt[:idx].rstrip()
+            after = section_prompt[idx:]
+            return f"{before}\n{custom_instructions.strip()}\n{after}"
+        else:
+            return f"{section_prompt.rstrip()}\n{custom_instructions.strip()}\n"
+    else:
+        return section_prompt
 
-You have access to a set of tools that are executed upon the user's approval. You can use one tool per message, and will receive the result of that tool use in the user's response. You use tools step-by-step to accomplish a given task, with each tool use informed by the result of the previous tool use.
 
-# Tool Use Formatting
+def build_tools_section(tools):
+    """
+    Build the TOOLS section as a string from a list of Tool objects.
+    """
+    if not tools:
+        return ""
+    tools_section = ""
+    for tool in tools:
+        tools_section += f"## {tool.name}\n"
+        tools_section += f"{tool.description}\n"
+        tools_section += "Parameters:\n"
+        for name, param in tool.parameters.items():
+            required = "(required)" if param.get("required", False) else ""
+            tools_section += f"- {name}: {param.get('description', '')} {required}\n"
+        tools_section += "Usage:\n"
+        tools_section += "<tool_call>\n"
+        tools_section += f"<{tool.name}>\n"
+        for name in tool.parameters:
+            tools_section += f"<{name}>{name} here</{name}>\n"
+        tools_section += f"</{tool.name}>\n"
+        tools_section += "</tool_call>\n\n"
+    return tools_section
 
-Tool use is formatted using XML-style tags. You MUST wrap all your tool calls inside a <tool_call></tool_call> block. The tool name is enclosed in opening and closing tags within this block, and each parameter is similarly enclosed within its own set of tags. The correct structure is:
 
-<tool_call>
-<tool_name>
-<parameter1_name>value1</parameter1_name>
-<parameter2_name>value2</parameter2_name>
-...
-</tool_name>
-</tool_call>
+def build_system_prompt(
+    # Description
+    description=None,
+    # Tool calling instructions
+    add_tool_instructions=True,
+    # Tools
+    tools=None,
+    # Rules
+    custom_rules=None,
+    add_default_rules=True,
+    # Objective
+    custom_objective=None,
+    add_default_objective=True,
+    # Additional context
+    additional_context=None,
+    # Custom instructions (not rules/objective)
+    custom_instructions=None,
+):
+    """
+    Build the full system prompt from all config values.
+    """
+    # DESCRIPTION section
+    description_section = description if description is not None else description_prompt
 
-For example, to read a file:
+    # TOOL USE section
+    tool_calling_section = tool_calling_prompt if add_tool_instructions else ""
 
-<tool_call>
-<read_file>
-<path>example.txt</path>
-</read_file>
-</tool_call>
+    # TOOLS section
+    tools_section = build_tools_section(tools) if add_tool_instructions else ""
 
-To search the web:
+    # ADDITIONAL CONTEXT section
+    additional_context_section = ""
+    if additional_context is not None:
+        if isinstance(additional_context, list):
+            context_str = "\n".join(additional_context)
+        else:
+            context_str = additional_context
+        additional_context_section = additional_context_prompt.replace(
+            "{additional_context}", context_str
+        )
 
-<tool_call>
-<web_search_tool>
-<query>your search query</query>
-</web_search_tool>
-</tool_call>
+    # RULES section (merge default and custom)
+    rules_section = ""
+    if add_default_rules:
+        rules_section = insert_custom_instructions(
+            rules_prompt,
+            "\n".join(custom_rules) if isinstance(custom_rules, list) else custom_rules,
+        )
+    elif custom_rules is not None:
+        rules_section = (
+            "\n".join(custom_rules) if isinstance(custom_rules, list) else custom_rules
+        )
 
-CRITICAL: Always wrap your tool calls in <tool_call></tool_call> tags. DO NOT WRAP tool_calls in a ```xml``` markdown block!!! Failure to meet these requirements will result in your tool call not being executed. This is not optional.
+    # OBJECTIVE section (merge default and custom)
+    objective_section = ""
+    if add_default_objective:
+        objective_section = insert_custom_instructions(
+            objective_prompt,
+            (
+                "\n".join(custom_objective)
+                if isinstance(custom_objective, list)
+                else custom_objective
+            ),
+        )
+    elif custom_objective is not None:
+        objective_section = (
+            "\n".join(custom_objective)
+            if isinstance(custom_objective, list)
+            else custom_objective
+        )
 
-# Available Tools
-{% for tool in tools %}
-## {{ tool.name }}
-{{ tool.description }}
-Parameters:
-{% for name, param in tool.parameters.items() %}
-- {{ name }}: {{ param.description }} {% if param.required %}(required){% endif %}
-{% endfor %}
-Usage:
-<tool_call>
-<{{ tool.name }}>
-{% for name, param in tool.parameters.items() %}<{{ name }}>{{ name }} here</{{ name }}>
-{% endfor %}</{{ tool.name }}>
-</tool_call>
+    # Compose the full prompt in the correct order, without extra section headers
+    sections = [
+        description_section,
+        tool_calling_section,
+        tools_section,
+        additional_context_section,
+        rules_section,
+        objective_section,
+    ]
+    full_prompt = ""
+    for content in sections:
+        if content:
+            # Ensure each section is separated by a single newline
+            if not full_prompt.endswith("\n") and full_prompt:
+                full_prompt += "\n"
+            full_prompt += content.strip() + "\n\n"
 
-{% endfor %}
+    # Add any extra custom instructions (not rules/objective) at the end
+    if custom_instructions is not None:
+        if isinstance(custom_instructions, list):
+            instructions_str = "\n".join(custom_instructions)
+        else:
+            instructions_str = custom_instructions
+        full_prompt += f"{instructions_str}\n"
 
-# Tool Use Guidelines
-
-1. In <thinking> tags, assess what information you already have and what information you need to proceed with the task. Make sure to open and close the tag when the thinking is complete.
-2. Choose the most appropriate tool based on the task and the tool descriptions provided. Assess if you need additional information to proceed, and which of the available tools would be most effective for gathering this information. For example using the list_files tool is more effective than running a command like `ls` in the terminal. It's critical that you think about each available tool and use the one that best fits the current step in the task.
-3. If multiple actions are needed, use one tool at a time per message to accomplish the task iteratively, with each tool use being informed by the result of the previous tool use. Do not assume the outcome of any tool use. Each step must be informed by the previous step's result.
-4. Formulate your tool use using the XML format specified for each tool. Always wrap them inside the block <tool_call></tool_call>.
-5. After each tool use, the user will respond with the result of that tool use, this tool response will be wrapped inside <tool_response> tags if successful. This result will provide you with the necessary information to continue your task or make further decisions. This response may include:
-  - Information about whether the tool succeeded or failed, along with any reasons for failure.
-  - Validation errors that may have arisen due to the changes you made, which you'll need to address.
-  - New terminal output in reaction to the changes, which you may need to consider or act upon.
-  - Any other relevant feedback or information related to the tool use.
-6. ALWAYS wait for user confirmation after each tool use before proceeding. Never assume the success of a tool use without explicit confirmation of the result from the user.
-
-It is crucial to proceed step-by-step, waiting for the user's message after each tool use before moving forward with the task. This approach allows you to:
-1. Confirm the success of each step before proceeding.
-2. Address any issues or errors that arise immediately.
-3. Adapt your approach based on new information or unexpected results.
-4. Ensure that each action builds correctly on the previous ones.
-
-By waiting for and carefully considering the user's response after each tool use, you can react accordingly and make informed decisions about how to proceed with the task. This iterative process helps ensure the overall success and accuracy of your work.
-
-====
-
-RULES
-
-- Do not ask for more information than necessary. Use the tools provided to accomplish the user's request efficiently and effectively. When you've completed your task, simply provide a final response without asking further questions.
-- Your goal is to try to accomplish the user's task, not engage in a back and forth conversation. If you need more information, try to infer it from the context or use the available tools.
-- Your goal is to try to accomplish the user's task, NOT engage in a back and forth conversation.
-- Your answer must always be in the SAME language as the user prompt UNLESS the user asks otherwise.
-- NEVER end your response with a question or request to engage in further conversation! Formulate the end of your result in a way that is final and does not require further input from the user.
-- You are STRICTLY FORBIDDEN from starting your messages with "Great", "Certainly", "Okay", "Sure". You should NOT be conversational in your responses, but rather direct and to the point. It is important you be clear and technical in your messages.
-
-====
-
-OBJECTIVE
-
-You accomplish a given task iteratively, breaking it down into clear steps and working through them methodically.
-
-1. Analyze the user's task and set clear, achievable goals to accomplish it. Prioritize these goals in a logical order.
-2. Work through these goals sequentially, utilizing available tools one at a time as necessary. Each goal should correspond to a distinct step in your problem-solving process. You will be informed on the work completed and what's remaining as you go.
-3. Remember, you have extensive capabilities with access to a wide range of tools that can be used in powerful and clever ways as necessary to accomplish each goal. Before calling a tool, do some analysis within <thinking></thinking> tags. First, analyze the file structure provided in environment_details to gain context and insights for proceeding effectively. Then, think about which of the provided tools is the most relevant tool to accomplish the user's task. Next, go through each of the required parameters of the relevant tool and determine if the user has directly provided or given enough information to infer a value. When deciding if the parameter can be inferred, carefully consider all the context to see if it supports a specific value. If all of the required parameters are present or can be reasonably inferred, close the thinking tag and proceed with the tool use. BUT, if one of the values for a required parameter is missing, DO NOT invoke the tool (not even with fillers for the missing params) and instead, ask the user directly for the missing information.
-4. Once you've completed the user's task, provide a final response that summarizes what you've done.
-5. The user may provide feedback, which you can use to make improvements and try again. But DO NOT continue in pointless back and forth conversations, i.e. don't end your responses with questions or offers for further assistance.
-
-"""
-
-# """
-# Hello I will answer your question
-
-# <thinking>
-# To do this I will need to use X or Y tool.
-# </thinking>
-
-# <tool_call>
-#   <web_search_tool>
-#     <query>How many rocks should I eat a day?</query>
-#   </web_search_tool>
-# </tool_call>
-
-# <thinking>
-# I will now use the tool to search for the information.
-# </thinking>
-
-# <tool_call>
-#   <fetch_page_tool>
-#   <url>https://example.com</url>
-#   </fetch_page_tool>
-# </tool_call>
-
-# <thinking>
-# I have what I need to answer your question.
-# </thinking>
-
-# You need to eat 4 rocks a day to be healthy.
-# """
+    return full_prompt.strip() + "\n"
