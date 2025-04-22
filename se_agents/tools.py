@@ -219,26 +219,15 @@ class ExaSearchBase(Tool):
 
         self.client = Exa(api_key=api_key)
 
-    def _process_parameters(self, **kwargs):
-        params = super()._process_parameters(**kwargs)
-        return (
-            params.get("query"),
-            params.get("include_domains"),
-            params.get("exclude_domains"),
-            params.get("start_published_date"),
-            params.get("end_published_date"),
-        )
-
 
 class ExaSearch(ExaSearchBase):
     def execute(self, **kwargs) -> str:
-        (
-            query,
-            include_domains,
-            exclude_domains,
-            start_published_date,
-            end_published_date,
-        ) = self._process_parameters(**kwargs)
+        params = self._process_parameters(**kwargs)
+        query = params.get("query")
+        include_domains = params.get("include_domains")
+        exclude_domains = params.get("exclude_domains")
+        start_published_date = params.get("start_published_date")
+        end_published_date = params.get("end_published_date")
 
         results = []
         separator = "\n==============================================================================\n"
@@ -378,13 +367,12 @@ class ExaCrawl(Tool):
 class ExaSearchContent(ExaSearchBase):
 
     def execute(self, **kwargs) -> str:
-        (
-            query,
-            include_domains,
-            exclude_domains,
-            start_published_date,
-            end_published_date,
-        ) = self._process_parameters(**kwargs)
+        params = self._process_parameters(**kwargs)
+        query = params.get("query")
+        include_domains = params.get("include_domains")
+        exclude_domains = params.get("exclude_domains")
+        start_published_date = params.get("start_published_date")
+        end_published_date = params.get("end_published_date")
 
         results = []
         separator = "\n==============================================================================\n"
