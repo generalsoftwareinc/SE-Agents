@@ -7,7 +7,7 @@ from email.mime import base
 from dotenv import load_dotenv
 
 from se_agents.agent import Agent
-from se_agents.tools import ExaCrawl, ExaSearch
+from se_agents.tools import ExaCrawl, ExaSearch, MockNumberTool
 
 load_dotenv(override=True)
 
@@ -52,45 +52,62 @@ async def main():
         print("Error: OPENROUTER_API_KEY environment variable not set")
         return
 
-    agent = Agent(
+    # Instantiate the mock tool
+    mock_tool = MockNumberTool()
+
+    # # Original agent initialization (commented out)
+    # agent = Agent(
+    #     api_key=api_key,
+    #     base_url=base_url,
+    #     model=model,
+    #     tools=[ExaSearch(exa_key), ExaCrawl(exa_key)],
+    #     # initial_messages=[
+    #     #     {
+    #     #         "role": "user",
+    #     #         "content": """You are a helpful assistant that can perform web searches and fetch pages using Firecrawl. You can also analyze files and provide insights.
+    #     #         """,
+    #     #     },
+    #     # ],
+    #     additional_context=f"Current system time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+    #     verbose=True,
+    #     rules=rules,
+    #     add_default_rules=False,
+    # )
+
+    # agent.messages.append(
+    #     {
+    #         "role": "user",
+    #         "content": """You are a helpful assistant that can perform web searches and fetch pages using Firecrawl.
+    #         """,
+    #     },
+    # )
+    # # print(agent.messages[0]["content"])
+
+    # Initialize the test agent
+    test_agent = Agent(
+        name="Test MockTools Agent",
         api_key=api_key,
         base_url=base_url,
         model=model,
-        tools=[ExaSearch(exa_key), ExaCrawl(exa_key)],
-        # initial_messages=[
-        #     {
-        #         "role": "user",
-        #         "content": """You are a helpful assistant that can perform web searches and fetch pages using Firecrawl. You can also analyze files and provide insights.
-        #         """,
-        #     },
-        # ],
-        additional_context=f"Current system time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        tools=[mock_tool],  # Equip only with the mock tool
         verbose=True,
-        rules=rules,
+        additional_context=f"Test Agent - Current time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        rules="You are a test agent equipped with MockIntTool. Your goal is to test its functionality.",
         add_default_rules=False,
     )
 
-    agent.messages.append(
-        {
-            "role": "user",
-            "content": """You are a helpful assistant that can perform web searches and fetch pages using Firecrawl.
-            """,
-        },
-    )
-
-    # print(agent.messages[0]["content"])
-
-    print("🤖 Starting agent loop...")
+    # Reusing the original loop structure for the test agent
+    print("🤖 Starting TEST agent loop...")
     print("Type 'exit' to end the conversation\n")
 
     while True:
-        user_input = input("\nUser: ")
+        user_input = input(f"\nUser ({test_agent.name}) ")  # Modified prompt
         if user_input.lower() == "exit":
             break
 
-        print("\nAssistant: ", end="")
-        # Create the generator
-        async for response in agent.run_stream(user_input):
+        print(f"\nAssistant ({test_agent.name}): ", end="")  # Modified prompt
+        # Create the generator using the test_agent
+        async for response in test_agent.run_stream(user_input):
             if response.type == "response":
                 print(
                     response.content,

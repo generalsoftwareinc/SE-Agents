@@ -34,9 +34,25 @@ class Tool:
                         or params[param_name].strip().isdigit()
                     ):
                         errors.append(f"{param_name} must be an integer")
+                    elif param_type == "number":
+                        val = params[param_name].strip()
+                        is_number = isinstance(val, (int, float))
+                        if isinstance(val, str):
+                            try:
+                                float(val)
+                                is_number = True
+                            except ValueError:
+                                is_number = False
+                        if not is_number:
+                            errors.append(
+                                f"{param_name} must be a number (integer or float)"
+                            )
                     elif param_type == "bool" and not (
                         isinstance(params[param_name], bool)
-                        or params[param_name].lower() in ("true", "false")
+                        or (
+                            isinstance(params[param_name], str)
+                            and params[param_name].strip().lower() in ("true", "false")
+                        )
                     ):
                         errors.append(f"{param_name} must be a boolean")
                 except Exception as e:
@@ -267,6 +283,34 @@ class ExaSearch(ExaSearchBase):
                 raise Exception(f"Error processing search results: {e}")
         else:
             return "Error: Search failed to return results after handling exceptions."
+
+
+class MockNumberTool(Tool):
+    def __init__(self):
+        super().__init__(
+            name="mock_number_tool",
+            description="A mock tool requiring a number (int or float) parameter.",
+            parameters={
+                "value": {  # Renamed parameter for clarity
+                    "type": "number",
+                    "description": "A number value (integer or float).",
+                    "required": True,
+                }
+            },
+        )
+
+    def execute(self, **kwargs) -> str:
+        value_str = kwargs.get("value")
+        # Basic validation (Tool class already does type check)
+        if value_str is None:
+            return "Error: Missing required parameter 'value'"
+        try:
+            # Convert to float to handle both int and float inputs
+            num_value = float(value_str)
+            return f"MockNumberTool executed successfully with value: {num_value}"
+        except ValueError:
+            # This case should ideally be caught by validate_parameters, but added as a safeguard
+            return f"Error: Parameter 'value' must be a number, received: {value_str}"
 
 
 class ExaCrawl(Tool):
