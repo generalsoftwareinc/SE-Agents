@@ -7,7 +7,7 @@ from email.mime import base
 from dotenv import load_dotenv
 
 from se_agents.agent import Agent
-from se_agents.tools import DuckDuckGoSearch, FireCrawlFetchPage, ExaSearchContent
+from se_agents.tools import ExaCrawl, ExaSearch
 
 load_dotenv(override=True)
 
@@ -56,11 +56,7 @@ async def main():
         api_key=api_key,
         base_url=base_url,
         model=model,
-        tools=[
-            DuckDuckGoSearch(),
-            FireCrawlFetchPage(firecrawl_key),
-            ExaSearchContent(exa_key),
-        ],
+        tools=[ExaSearch(exa_key), ExaCrawl(exa_key)],
         # initial_messages=[
         #     {
         #         "role": "user",
@@ -69,7 +65,6 @@ async def main():
         #     },
         # ],
         additional_context=f"Current system time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        wrap_response_chunks=True,
         verbose=True,
         rules=rules,
         add_default_rules=False,
@@ -97,11 +92,8 @@ async def main():
         # Create the generator
         async for response in agent.run_stream(user_input):
             if response.type == "response":
-                content = re.search(
-                    r"<response>(.*?)</response>", response.content, re.DOTALL
-                )
                 print(
-                    content.group(1) if content else response.content,
+                    response.content,
                     end="",
                     flush=True,
                 )

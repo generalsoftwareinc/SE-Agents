@@ -116,7 +116,7 @@ class FireCrawlFetchPage(Tool):
 class ExaSearchBase(Tool):
     def __init__(self, api_key: str):
         super().__init__(
-            name="exa_web_search",
+            name="web_search",
             description="Search the web using Exa AI - performs real-time web searches and can scrape content from specific URLs. Supports configurable result counts and returns the content from the most relevant websites.",
             parameters={
                 "query": {
@@ -229,7 +229,7 @@ class ExaSearch(ExaSearchBase):
         separator = "\n==============================================================================\n"
         for r in self.client.search(
             query=query,
-            num_results=num_results if num_results is not None else 3,
+            num_results=num_results if num_results is not None else 10,
             include_domains=include_domains,
             exclude_domains=exclude_domains,
             start_published_date=start_published_date,
@@ -239,10 +239,10 @@ class ExaSearch(ExaSearchBase):
         return f"Search results:{separator}" + separator.join(results)
 
 
-class ExaCrawling(Tool):
+class ExaCrawl(Tool):
     def __init__(self, api_key: str):
         super().__init__(
-            name="crawling",
+            name="crawl",
             description="Extract content from specific URLs using Exa AI - performs targeted crawling of web pages to retrieve their full content. Useful for reading articles, PDFs, or any web page when you have the exact URL. Returns the complete text content of the specified URL.",
             parameters={
                 "url": {
