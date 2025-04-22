@@ -39,7 +39,6 @@ class Agent:
         add_default_objective: bool = True,
         # Message config
         initial_messages: Optional[List[Dict[str, str]]] = None,
-        wrap_response_chunks: bool = False,
         # Verbose config
         verbose: bool = False,
     ):
@@ -68,7 +67,6 @@ class Agent:
         self.add_default_objective = add_default_objective
         self._custom_instructions = instructions
         self._additional_context = additional_context
-        self.wrap_response_chunks = wrap_response_chunks
 
         # Message config
         system_message = self._add_system_prompt()
@@ -311,11 +309,7 @@ class Agent:
                                         halted_tokens = ""
                                         yield ResponseEvent(
                                             type="tool_error",
-                                            content=(
-                                                f"<tool_error>{content}</tool_error>"
-                                                if self.wrap_response_chunks
-                                                else content
-                                            ),
+                                            content=f"<tool_error>{content}</tool_error>",
                                         )
                                     if tool_call:
                                         tool_found = True
@@ -344,11 +338,7 @@ class Agent:
                         else:
                             yield ResponseEvent(
                                 type="response",
-                                content=(
-                                    f"<response>{content}</response>"
-                                    if self.wrap_response_chunks
-                                    else content
-                                ),
+                                content=content,
                             )
 
             if full_response.strip() and not re.search(r"</[^>]+>\s*$", full_response):
