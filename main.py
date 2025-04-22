@@ -7,7 +7,7 @@ from email.mime import base
 from dotenv import load_dotenv
 
 from se_agents.agent import Agent
-from se_agents.tools import DuckDuckGoSearch, FireCrawlFetchPage
+from se_agents.tools import DuckDuckGoSearch, FireCrawlFetchPage, ExaSearchContent
 
 load_dotenv(override=True)
 
@@ -42,16 +42,25 @@ async def main():
 
     api_key = os.getenv("OPENROUTER_API_KEY")
     # api_key = None
-    model = os.getenv("OPENROUTER_MODEL")
-    firecrawl_key = os.getenv("FIRECRAWL_API_KEY")
-    base_url = os.getenv("OPENROUTER_BASE_URL")
     # base_url = None
+    model = os.getenv("OPENROUTER_MODEL")
+    base_url = os.getenv("OPENROUTER_BASE_URL")
+    firecrawl_key = os.getenv("FIRECRAWL_API_KEY")
+    exa_key = os.getenv("EXA_API_KEY")
+
+    if not api_key:
+        print("Error: OPENROUTER_API_KEY environment variable not set")
+        return
 
     agent = Agent(
         api_key=api_key,
         base_url=base_url,
         model=model,
-        tools=[DuckDuckGoSearch(), FireCrawlFetchPage(firecrawl_key)],
+        tools=[
+            DuckDuckGoSearch(),
+            FireCrawlFetchPage(firecrawl_key),
+            ExaSearchContent(exa_key),
+        ],
         # initial_messages=[
         #     {
         #         "role": "user",
