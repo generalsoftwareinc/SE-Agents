@@ -1,9 +1,11 @@
+import time
 from typing import List
 
 from dotenv import load_dotenv
 from duckduckgo_search import DDGS
 from exa_py import Exa
 from firecrawl import FirecrawlApp
+from requests import HTTPError
 
 
 class Tool:
@@ -29,7 +31,7 @@ class Tool:
                         errors.append(f"{param_name} must be a string")
                     elif param_type == "int" and not (
                         isinstance(params[param_name], int)
-                        or params[param_name].isdigit()
+                        or params[param_name].strip().isdigit()
                     ):
                         errors.append(f"{param_name} must be an integer")
                     elif param_type == "bool" and not (
@@ -124,11 +126,6 @@ class ExaSearchBase(Tool):
                     "description": "Search query",
                     "required": True,
                 },
-                "num_results": {
-                    "type": "int",
-                    "description": "Number of results to return.",
-                    "required": False,
-                },
                 "include_domains": {
                     "type": "List[string]",
                     "description": "List of comma-separated domains to include in the search.",
@@ -167,7 +164,6 @@ class ExaSearchBase(Tool):
         query = kwargs.get("query")
         if not query:
             raise ValueError("Missing required parameter 'query'")
-        num_results = kwargs.get("num_results")
         include_domains = kwargs.get("include_domains")
         exclude_domains = kwargs.get("exclude_domains")
         start_published_date = kwargs.get("start_published_date")
@@ -180,7 +176,6 @@ class ExaSearchBase(Tool):
 
         return (
             query,
-            num_results,
             include_domains,
             exclude_domains,
             start_published_date,
@@ -218,7 +213,6 @@ class ExaSearch(ExaSearchBase):
     def execute(self, **kwargs) -> str:
         (
             query,
-            num_results,
             include_domains,
             exclude_domains,
             start_published_date,
@@ -227,16 +221,52 @@ class ExaSearch(ExaSearchBase):
 
         results = []
         separator = "\n==============================================================================\n"
-        for r in self.client.search(
-            query=query,
-            num_results=num_results if num_results is not None else 10,
-            include_domains=include_domains,
-            exclude_domains=exclude_domains,
-            start_published_date=start_published_date,
-            end_published_date=end_published_date,
-        ).results:
-            results.append(f"- {r.title}\n  URL: {r.url}")
-        return f"Search results:{separator}" + separator.join(results)
+
+        search_results = None
+
+        while True:
+            try:
+                search_results = self.client.search(
+                    query=query,
+                    num_results=10,
+                    include_domains=include_domains,
+                    exclude_domains=exclude_domains,
+                    start_published_date=start_published_date,
+                    end_published_date=end_published_date,
+                ).results
+                break
+            except ValueError as e:
+                msg = ""
+                if e.args:
+                    msg = str(e.args[0])
+
+                status_code = getattr(e, "response", None) and getattr(
+                    e.response, "status_code", None
+                )
+
+                if status_code == 429 or "429" in msg:
+                    print("Rate limit exceeded (429). Retrying after 1 second...")
+                    time.sleep(1)
+                    continue
+                else:
+                    text = getattr(e, "response", None) and getattr(
+                        e.response, "text", str(e)
+                    )
+                    raise Exception(
+                        f"Error during search: {status_code or 'N/A'} - {text}"
+                    )
+            except Exception as e:
+                raise Exception(f"An unexpected error occurred during search: {e}")
+
+        if search_results is not None:
+            try:
+                for r in search_results:
+                    results.append(f"- {r.title}\n  URL: {r.url}")
+                return f"Search results:{separator}" + separator.join(results)
+            except Exception as e:
+                raise Exception(f"Error processing search results: {e}")
+        else:
+            return "Error: Search failed to return results after handling exceptions."
 
 
 class ExaCrawl(Tool):
@@ -259,16 +289,42 @@ class ExaCrawl(Tool):
         if not url:
             return "Error: No URL provided"
 
-        try:
-            # Use the Exa client to fetch the page
-            response = self.client.get_contents(
-                urls=[url], text={"max_characters": 16000, "include_html_tags": False}
-            )
-            content = response.results[0].text
+        content = None
+        while True:
+            try:
+                response = self.client.get_contents(
+                    urls=[url],
+                    text={"max_characters": 64000, "include_html_tags": False},
+                    livecrawl="always",
+                )
+                if response.results:
+                    content = response.results[0].text
+                break  # Exit loop if successful
+            except ValueError as e:
+                msg = ""
+                if e.args:
+                    msg = str(e.args[0])
+                status_code = getattr(e, "response", None) and getattr(
+                    e.response, "status_code", None
+                )
+                if status_code == 429 or "429" in msg:
+                    print(
+                        "Rate limit exceeded (429) for crawl. Retrying after 1 second..."
+                    )
+                    time.sleep(1)
+                    continue
+                else:
+                    text = getattr(e, "response", None) and getattr(
+                        e.response, "text", str(e)
+                    )
+                    return f"Error fetching page: {status_code or 'N/A'} - {text}"  # Return error for non-429
+            except Exception as e:
+                return f"Error fetching page: {e}"  # Return error for other exceptions
 
+        if content is not None:
             return content
-        except Exception as e:
-            return f"Error fetching page: {e}"
+        else:
+            return "Error: Failed to fetch page content after handling exceptions."
 
 
 class ExaSearchContent(ExaSearchBase):
@@ -276,7 +332,6 @@ class ExaSearchContent(ExaSearchBase):
     def execute(self, **kwargs) -> str:
         (
             query,
-            num_results,
             include_domains,
             exclude_domains,
             start_published_date,
@@ -285,13 +340,50 @@ class ExaSearchContent(ExaSearchBase):
 
         results = []
         separator = "\n==============================================================================\n"
-        for r in self.client.search_and_contents(
-            query=query,
-            num_results=num_results if num_results is not None else 3,
-            include_domains=include_domains,
-            exclude_domains=exclude_domains,
-            start_published_date=start_published_date,
-            end_published_date=end_published_date,
-        ).results:
-            results.append(f"- {r.title}\n  URL: {r.url}\n  Body: {r.text}")
-        return f"Search results:{separator}" + separator.join(results)
+        search_results = None
+
+        while True:
+            try:
+                search_results = self.client.search_and_contents(
+                    query=query,
+                    num_results=10,
+                    include_domains=include_domains,
+                    exclude_domains=exclude_domains,
+                    start_published_date=start_published_date,
+                    end_published_date=end_published_date,
+                ).results
+                break
+            except ValueError as e:
+                msg = ""
+                if e.args:
+                    msg = str(e.args[0])
+                status_code = getattr(e, "response", None) and getattr(
+                    e.response, "status_code", None
+                )
+                if status_code == 429 or "429" in msg:
+                    print(
+                        "Rate limit exceeded (429) for search_and_contents. Retrying after 1 second..."
+                    )
+                    time.sleep(1)
+                    continue
+                else:
+                    text = getattr(e, "response", None) and getattr(
+                        e.response, "text", str(e)
+                    )
+                    raise Exception(
+                        f"Error during search_and_contents: {status_code or 'N/A'} - {text}"
+                    )
+            except Exception as e:
+                raise Exception(
+                    f"An unexpected error occurred during search_and_contents: {e}"
+                )
+
+        if search_results is not None:
+            try:
+                for r in search_results:
+                    results.append(f"- {r.title}\n  URL: {r.url}\n  Body: {r.text}")
+                return f"Search results:{separator}" + separator.join(results)
+            except Exception as e:
+                raise Exception(f"Error processing search_and_contents results: {e}")
+        else:
+            return "Error: Search failed to return results after handling exceptions."
