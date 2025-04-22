@@ -101,17 +101,17 @@ async def main():
     print("Type 'exit' to end the conversation\n")
 
     while True:
-        user_input = input(f"\nUser:")
-        # user_input = input(f"\nUser ({test_agent.name}) ")  # Modified prompt
+        user_input = input(f"\nUser: ")
+        # user_input = input(f"\nUser ({test_agent.name}): ")  # Modified prompt
         if user_input.lower() == "exit":
             break
 
         print(f"\nAssistant: ", end="")  # Modified prompt
         # print(f"\nAssistant ({test_agent.name}): ", end="")  # Modified prompt
-        
+
         async for response in agent.run_stream(user_input):
-        # Create the generator using the test_agent
-        # async for response in test_agent.run_stream(user_input):
+            # Create the generator using the test_agent
+            # async for response in test_agent.run_stream(user_input):
             if response.type == "response":
                 print(
                     response.content,

@@ -1,7 +1,7 @@
+import inspect
 import re
 import xml.etree.ElementTree as ET
 from pprint import pprint
-import inspect
 from typing import AsyncGenerator, Dict, List, Optional, Union
 
 from openai import Client
@@ -196,9 +196,11 @@ class Agent:
 
         return {tool_name: params}, None, raw_tool_call_xml
 
-    async def _execute_tool(self, tool_name: str, params: Dict[str, str]) -> tuple[str, bool]:
+    async def _execute_tool(
+        self, tool_name: str, params: Dict[str, str]
+    ) -> tuple[str, bool]:
         """Execute a tool with the given parameters and return the result and success status.
-        
+
         This method can handle both synchronous and asynchronous tools.
 
         Returns:
@@ -370,18 +372,16 @@ class Agent:
 
                 tool_result, success = await self._execute_tool(tool_name, tool_params)
 
+                history_message_content = (
+                    tool_result if isinstance(tool_result, str) else str(tool_result)
+                )
+                history_message = (
+                    f"<tool_response>\n{history_message_content}\n</tool_response>"
+                )
                 if success:
-                    if not isinstance(tool_result, str):
-                         tool_result = str(tool_result)
-                    yield ResponseEvent(type="tool_response", content=tool_result)
-                else:
-                    if not isinstance(tool_result, str):
-                         tool_result = str(tool_result)
-                    yield ResponseEvent(type="tool_error", content=tool_result)
-
-                history_message_content = tool_result if isinstance(tool_result, str) else str(tool_result)
-                history_message = f"<tool_response>\n{history_message_content}\n</tool_response>"
+                    yield ResponseEvent(type="tool_response", content=history_message)
                 if not success:
+                    yield ResponseEvent(type="tool_error", content=tool_result)
                     tool = self._get_tool_by_name(tool_name)
                     if tool:
                         param_info = "\n".join(
