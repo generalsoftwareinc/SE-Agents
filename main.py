@@ -53,26 +53,26 @@ async def main():
         return
 
     # Instantiate the mock tool
-    mock_tool = MockNumberTool()
+    # mock_tool = MockNumberTool()
 
-    # # Original agent initialization (commented out)
-    # agent = Agent(
-    #     api_key=api_key,
-    #     base_url=base_url,
-    #     model=model,
-    #     tools=[ExaSearch(exa_key), ExaCrawl(exa_key)],
-    #     # initial_messages=[
-    #     #     {
-    #     #         "role": "user",
-    #     #         "content": """You are a helpful assistant that can perform web searches and fetch pages using Firecrawl. You can also analyze files and provide insights.
-    #     #         """,
-    #     #     },
-    #     # ],
-    #     additional_context=f"Current system time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-    #     verbose=True,
-    #     rules=rules,
-    #     add_default_rules=False,
-    # )
+    # Original agent initialization (commented out)
+    agent = Agent(
+        api_key=api_key,
+        base_url=base_url,
+        model=model,
+        tools=[ExaSearch(exa_key), ExaCrawl(exa_key)],
+        # initial_messages=[
+        #     {
+        #         "role": "user",
+        #         "content": """You are a helpful assistant that can perform web searches and fetch pages using Firecrawl. You can also analyze files and provide insights.
+        #         """,
+        #     },
+        # ],
+        additional_context=f"Current system time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        verbose=True,
+        rules=rules,
+        add_default_rules=False,
+    )
 
     # agent.messages.append(
     #     {
@@ -84,30 +84,34 @@ async def main():
     # # print(agent.messages[0]["content"])
 
     # Initialize the test agent
-    test_agent = Agent(
-        name="Test MockTools Agent",
-        api_key=api_key,
-        base_url=base_url,
-        model=model,
-        tools=[mock_tool],  # Equip only with the mock tool
-        verbose=True,
-        additional_context=f"Test Agent - Current time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        rules="You are a test agent equipped with MockIntTool. Your goal is to test its functionality.",
-        add_default_rules=False,
-    )
+    # test_agent = Agent(
+    #     name="Test MockTools Agent",
+    #     api_key=api_key,
+    #     base_url=base_url,
+    #     model=model,
+    #     tools=[mock_tool],  # Equip only with the mock tool
+    #     verbose=True,
+    #     additional_context=f"Test Agent - Current time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+    #     rules="You are a test agent equipped with MockIntTool. Your goal is to test its functionality.",
+    #     add_default_rules=False,
+    # )
 
     # Reusing the original loop structure for the test agent
     print("🤖 Starting TEST agent loop...")
     print("Type 'exit' to end the conversation\n")
 
     while True:
-        user_input = input(f"\nUser ({test_agent.name}) ")  # Modified prompt
+        user_input = input(f"\nUser:")
+        # user_input = input(f"\nUser ({test_agent.name}) ")  # Modified prompt
         if user_input.lower() == "exit":
             break
 
-        print(f"\nAssistant ({test_agent.name}): ", end="")  # Modified prompt
+        print(f"\nAssistant: ", end="")  # Modified prompt
+        # print(f"\nAssistant ({test_agent.name}): ", end="")  # Modified prompt
+        
+        async for response in agent.run_stream(user_input):
         # Create the generator using the test_agent
-        async for response in test_agent.run_stream(user_input):
+        # async for response in test_agent.run_stream(user_input):
             if response.type == "response":
                 print(
                     response.content,

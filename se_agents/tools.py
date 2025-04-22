@@ -14,6 +14,56 @@ class Tool:
         self.description = description
         self.parameters = parameters
 
+    def _process_parameters(self, **kwargs: dict) -> dict:
+        processed_parameters = {}
+
+        for param, value in kwargs.items():
+            tool_param = self.parameters.get(param, None)
+            if not tool_param:
+                raise KeyError(f"{param} is not a parameter of the tool {self.name}")
+
+            if tool_param["type"] == "int":
+                processed_parameters[param] = int(value)
+            elif tool_param["type"] == "List[str]":
+                processed_parameters[param] = self._convert_to_list(value=value)
+            elif tool_param["type"] == "bool":
+                boolean_str = value.strip().lower()
+
+                if boolean_str not in ("true", "false"):
+                    raise ValueError(f"{boolean_str} cannot be parsed into boolean")
+
+                processed_parameters[param] = boolean_str == "true"
+            else:
+                processed_parameters[param] = value
+
+        return processed_parameters
+
+    def _convert_to_list(self, value) -> List[str]:
+        """
+        Convert input to a list of strings.
+
+        Accepts either a comma-separated string or a list of strings.
+        Strips whitespace from each element.
+        Raises ValueError if the input is neither a string nor a list of strings.
+
+        Args:
+            value (str or list of str): Input to convert.
+
+        Returns:
+            List[str]: List of strings.
+
+        Raises:
+            ValueError: If input is not a string or a list of strings.
+        """
+        if isinstance(value, str):
+            return [d.strip() for d in value.split(",")]
+        elif isinstance(value, list) and all(isinstance(d, str) for d in value):
+            return value
+        else:
+            raise ValueError(
+                "Value must be a list of strings or a comma-separated string."
+            )
+
     def validate_parameters(self, params: dict) -> List[str]:
         errors = []
         for param_name, config in self.parameters.items():
@@ -78,7 +128,8 @@ class DuckDuckGoSearch(Tool):
         )
 
     def execute(self, **kwargs) -> str:
-        query = kwargs.get("query")
+        params = self._process_parameters(**kwargs)
+        query = params.get("query")
         if not query:
             return "Error: No query provided"
 
@@ -107,7 +158,8 @@ class FireCrawlFetchPage(Tool):
         self.client = FirecrawlApp(api_key=api_key)
 
     def execute(self, **kwargs) -> str:
-        url = kwargs.get("url")
+        params = self._process_parameters(**kwargs)
+        url = params.get("url")
         if not url:
             return "Error: No URL provided"
 
@@ -168,61 +220,14 @@ class ExaSearchBase(Tool):
         self.client = Exa(api_key=api_key)
 
     def _process_parameters(self, **kwargs):
-        """
-        Extract and process Exa search parameters from kwargs.
-
-        Returns:
-            tuple: (query, num_results, include_domains, exclude_domains, start_published_date, end_published_date)
-
-        Raises:
-            ValueError: If a required parameter is missing or invalid.
-        """
-        query = kwargs.get("query")
-        if not query:
-            raise ValueError("Missing required parameter 'query'")
-        include_domains = kwargs.get("include_domains")
-        exclude_domains = kwargs.get("exclude_domains")
-        start_published_date = kwargs.get("start_published_date")
-        end_published_date = kwargs.get("end_published_date")
-
-        if include_domains is not None:
-            include_domains = self._convert_to_list(include_domains)
-        if exclude_domains is not None:
-            exclude_domains = self._convert_to_list(exclude_domains)
-
+        params = super()._process_parameters(**kwargs)
         return (
-            query,
-            include_domains,
-            exclude_domains,
-            start_published_date,
-            end_published_date,
+            params.get("query"),
+            params.get("include_domains"),
+            params.get("exclude_domains"),
+            params.get("start_published_date"),
+            params.get("end_published_date"),
         )
-
-    def _convert_to_list(self, value) -> List[str]:
-        """
-        Convert input to a list of strings.
-
-        Accepts either a comma-separated string or a list of strings.
-        Strips whitespace from each element.
-        Raises ValueError if the input is neither a string nor a list of strings.
-
-        Args:
-            value (str or list of str): Input to convert.
-
-        Returns:
-            List[str]: List of strings.
-
-        Raises:
-            ValueError: If input is not a string or a list of strings.
-        """
-        if isinstance(value, str):
-            return [d.strip() for d in value.split(",")]
-        elif isinstance(value, list) and all(isinstance(d, str) for d in value):
-            return value
-        else:
-            raise ValueError(
-                "Value must be a list of strings or a comma-separated string."
-            )
 
 
 class ExaSearch(ExaSearchBase):
@@ -300,17 +305,15 @@ class MockNumberTool(Tool):
         )
 
     def execute(self, **kwargs) -> str:
-        value_str = kwargs.get("value")
-        # Basic validation (Tool class already does type check)
-        if value_str is None:
+        params = self._process_parameters(**kwargs)
+        value = params.get("value")
+        if value is None:
             return "Error: Missing required parameter 'value'"
         try:
-            # Convert to float to handle both int and float inputs
-            num_value = float(value_str)
+            num_value = float(value)
             return f"MockNumberTool executed successfully with value: {num_value}"
         except ValueError:
-            # This case should ideally be caught by validate_parameters, but added as a safeguard
-            return f"Error: Parameter 'value' must be a number, received: {value_str}"
+            return f"Error: Parameter 'value' must be a number, received: {value}"
 
 
 class ExaCrawl(Tool):
@@ -329,7 +332,8 @@ class ExaCrawl(Tool):
         self.client = Exa(api_key=api_key)
 
     def execute(self, **kwargs) -> str:
-        url = kwargs.get("url")
+        params = self._process_parameters(**kwargs)
+        url = params.get("url")
         if not url:
             return "Error: No URL provided"
 
