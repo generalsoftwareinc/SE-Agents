@@ -1,8 +1,8 @@
 from typing import List
 
-from exa_py import Exa
 from dotenv import load_dotenv
 from duckduckgo_search import DDGS
+from exa_py import Exa
 from firecrawl import FirecrawlApp
 
 
@@ -113,16 +113,21 @@ class FireCrawlFetchPage(Tool):
             return f"Error fetching page: {e}"
 
 
-class ExaSearchContent(Tool):
+class ExaSearchBase(Tool):
     def __init__(self, api_key: str):
         super().__init__(
             name="exa_web_search",
-            description="Search the web using Exa Search",
+            description="Search the web using Exa AI - performs real-time web searches and can scrape content from specific URLs. Supports configurable result counts and returns the content from the most relevant websites.",
             parameters={
                 "query": {
                     "type": "string",
                     "description": "Search query",
                     "required": True,
+                },
+                "num_results": {
+                    "type": "int",
+                    "description": "Number of results to return.",
+                    "required": False,
                 },
                 "include_domains": {
                     "type": "List[string]",
@@ -136,12 +141,12 @@ class ExaSearchContent(Tool):
                 },
                 "start_published_date": {
                     "type": "string",
-                    "description": "Start publication date in ISO format (like 2025-04-08T04:00:00.000Z).",
+                    "description": "Start publication date in ISO format (like 2025-04-08T04:00:00.000Z). Results will only include links with a published date after this date.",
                     "required": False,
                 },
                 "end_published_date": {
                     "type": "string",
-                    "description": "End publication date in ISO format (like 2025-04-08T04:00:00.000Z).",
+                    "description": "End publication date in ISO format (like 2025-04-08T04:00:00.000Z). Results will only include links with a published date before this date.",
                     "required": False,
                 },
             },
@@ -149,38 +154,140 @@ class ExaSearchContent(Tool):
 
         self.client = Exa(api_key=api_key)
 
+    def _process_parameters(self, **kwargs):
+        """
+        Extract and process Exa search parameters from kwargs.
+
+        Returns:
+            tuple: (query, num_results, include_domains, exclude_domains, start_published_date, end_published_date)
+
+        Raises:
+            ValueError: If a required parameter is missing or invalid.
+        """
+        query = kwargs.get("query")
+        if not query:
+            raise ValueError("Missing required parameter 'query'")
+        num_results = kwargs.get("num_results")
+        include_domains = kwargs.get("include_domains")
+        exclude_domains = kwargs.get("exclude_domains")
+        start_published_date = kwargs.get("start_published_date")
+        end_published_date = kwargs.get("end_published_date")
+
+        if include_domains is not None:
+            include_domains = self._convert_to_list(include_domains)
+        if exclude_domains is not None:
+            exclude_domains = self._convert_to_list(exclude_domains)
+
+        return (
+            query,
+            num_results,
+            include_domains,
+            exclude_domains,
+            start_published_date,
+            end_published_date,
+        )
+
     def _convert_to_list(self, value) -> List[str]:
         """
-        Converts a comma-separated string or a list of strings to a list of strings.
+        Convert input to a list of strings.
+
+        Accepts either a comma-separated string or a list of strings.
+        Strips whitespace from each element.
+        Raises ValueError if the input is neither a string nor a list of strings.
+
+        Args:
+            value (str or list of str): Input to convert.
+
+        Returns:
+            List[str]: List of strings.
+
+        Raises:
+            ValueError: If input is not a string or a list of strings.
         """
         if isinstance(value, str):
             return [d.strip() for d in value.split(",")]
         elif isinstance(value, list) and all(isinstance(d, str) for d in value):
             return value
         else:
-            raise ValueError("Value must be a list of strings or a comma-separated string.")
+            raise ValueError(
+                "Value must be a list of strings or a comma-separated string."
+            )
+
+
+class ExaSearch(ExaSearchBase):
+    def execute(self, **kwargs) -> str:
+        (
+            query,
+            num_results,
+            include_domains,
+            exclude_domains,
+            start_published_date,
+            end_published_date,
+        ) = self._process_parameters(**kwargs)
+
+        results = []
+        separator = "\n==============================================================================\n"
+        for r in self.client.search(
+            query=query,
+            num_results=num_results if num_results is not None else 3,
+            include_domains=include_domains,
+            exclude_domains=exclude_domains,
+            start_published_date=start_published_date,
+            end_published_date=end_published_date,
+        ).results:
+            results.append(f"- {r.title}\n  URL: {r.url}")
+        return f"Search results:{separator}" + separator.join(results)
+
+
+class ExaCrawling(Tool):
+    def __init__(self, api_key: str):
+        super().__init__(
+            name="crawling",
+            description="Extract content from specific URLs using Exa AI - performs targeted crawling of web pages to retrieve their full content. Useful for reading articles, PDFs, or any web page when you have the exact URL. Returns the complete text content of the specified URL.",
+            parameters={
+                "url": {
+                    "type": "string",
+                    "description": "URL of the page to fetch",
+                    "required": True,
+                }
+            },
+        )
+        self.client = Exa(api_key=api_key)
 
     def execute(self, **kwargs) -> str:
-        query = kwargs.get("query")
-        include_domains = kwargs.get("include_domains")
-        exclude_domains = kwargs.get("exclude_domains")
-        start_published_date = kwargs.get("start_published_date")
-        end_published_date = kwargs.get("end_published_date")
+        url = kwargs.get("url")
+        if not url:
+            return "Error: No URL provided"
 
         try:
-            include_domains = self._convert_to_list(include_domains) if include_domains else None
-            exclude_domains = self._convert_to_list(exclude_domains) if exclude_domains else None
-        except ValueError as e:
-            return f"Error: {str(e)}"
+            # Use the Exa client to fetch the page
+            response = self.client.get_contents(
+                urls=[url], text={"max_characters": 16000, "include_html_tags": False}
+            )
+            content = response.results[0].text
 
-        if not query:
-            return "Error: No query provided"
+            return content
+        except Exception as e:
+            return f"Error fetching page: {e}"
+
+
+class ExaSearchContent(ExaSearchBase):
+
+    def execute(self, **kwargs) -> str:
+        (
+            query,
+            num_results,
+            include_domains,
+            exclude_domains,
+            start_published_date,
+            end_published_date,
+        ) = self._process_parameters(**kwargs)
 
         results = []
         separator = "\n==============================================================================\n"
         for r in self.client.search_and_contents(
             query=query,
-            num_results=3,
+            num_results=num_results if num_results is not None else 3,
             include_domains=include_domains,
             exclude_domains=exclude_domains,
             start_published_date=start_published_date,
