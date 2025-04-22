@@ -24,7 +24,7 @@ class Tool:
 
             if tool_param["type"] == "int":
                 processed_parameters[param] = int(value)
-            elif tool_param["type"] == "List[str]":
+            elif tool_param["type"] == "List[string]":
                 processed_parameters[param] = self._convert_to_list(value=value)
             elif tool_param["type"] == "bool":
                 boolean_str = value.strip().lower()
