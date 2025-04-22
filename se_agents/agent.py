@@ -1,6 +1,7 @@
 import re
 import xml.etree.ElementTree as ET
 from pprint import pprint
+import inspect
 from typing import AsyncGenerator, Dict, List, Optional, Union
 
 from openai import Client
@@ -195,8 +196,10 @@ class Agent:
 
         return {tool_name: params}, None, raw_tool_call_xml
 
-    def _execute_tool(self, tool_name: str, params: Dict[str, str]) -> tuple[str, bool]:
+    async def _execute_tool(self, tool_name: str, params: Dict[str, str]) -> tuple[str, bool]:
         """Execute a tool with the given parameters and return the result and success status.
+        
+        This method can handle both synchronous and asynchronous tools.
 
         Returns:
             tuple: (result, success)
@@ -205,7 +208,6 @@ class Agent:
         """
         tool = self._get_tool_by_name(tool_name)
         if not tool:
-            # Revert the previous incorrect change here
             return f"Unknown tool: {tool_name}", False
 
         errors = tool.validate_parameters(params)
@@ -213,7 +215,14 @@ class Agent:
             return "\n".join(errors), False
 
         try:
-            result = tool.execute(**params)
+            if inspect.iscoroutinefunction(tool.execute):
+                result = await tool.execute(**params)
+            else:
+                result = tool.execute(**params)
+
+            if not isinstance(result, str):
+                result = str(result)
+
             return result, True
         except Exception as e:
             return f"Tool error: {str(e)}", False
@@ -359,14 +368,19 @@ class Agent:
                 tool_name = list(tool_call.keys())[0]
                 tool_params = tool_call[tool_name]
 
-                tool_result, success = self._execute_tool(tool_name, tool_params)
+                tool_result, success = await self._execute_tool(tool_name, tool_params)
 
                 if success:
+                    if not isinstance(tool_result, str):
+                         tool_result = str(tool_result)
                     yield ResponseEvent(type="tool_response", content=tool_result)
                 else:
+                    if not isinstance(tool_result, str):
+                         tool_result = str(tool_result)
                     yield ResponseEvent(type="tool_error", content=tool_result)
 
-                history_message = f"<tool_response>\n{tool_result}\n</tool_response>"
+                history_message_content = tool_result if isinstance(tool_result, str) else str(tool_result)
+                history_message = f"<tool_response>\n{history_message_content}\n</tool_response>"
                 if not success:
                     tool = self._get_tool_by_name(tool_name)
                     if tool:
