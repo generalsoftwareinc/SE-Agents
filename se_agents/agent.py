@@ -277,9 +277,12 @@ class Agent:
             for chunk in response:
                 if chunk.choices[0].delta.content:
                     full_content = chunk.choices[0].delta.content
-                    parts = re.findall(r"(\s*\S+\s*|\s+)", full_content)
+                    parts = re.findall(r"(<|>|\s+|[^\s<>]+)", full_content)
                     # print(f"CONTENT: '{full_content}' ===> PARTS: '{parts}'\n")
                     for content in parts:
+                        if "ing>" in content:
+                            print(f"CONTENT: {content}")
+                            print(f"CONTENT: '{full_content}' ===> PARTS: '{parts}'\n")
                         full_response += content
 
                         if "<" in content:
