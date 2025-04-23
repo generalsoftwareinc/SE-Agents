@@ -323,7 +323,7 @@ class Agent:
                                         halted_tokens = ""
                                         yield ResponseEvent(
                                             type="tool_error",
-                                            content=f"<tool_error>{content}</tool_error>",
+                                            content=f"<tool_error>\n{content}\n</tool_error>\n",
                                         )
                                     if tool_call:
                                         tool_found = True
@@ -345,7 +345,11 @@ class Agent:
                                     tokens_since_halted = 0
                                     yield ResponseEvent(
                                         type="thinking",
-                                        content=halted_tokens,
+                                        content=(
+                                            halted_tokens
+                                            if halted_tokens.endswith("\n")
+                                            else halted_tokens + "\n"
+                                        ),
                                     )
                                     halted_tokens = ""
 
@@ -379,7 +383,7 @@ class Agent:
                     tool_result if isinstance(tool_result, str) else str(tool_result)
                 )
                 history_message = (
-                    f"<tool_response>\n{history_message_content}\n</tool_response>"
+                    f"<tool_response>\n{history_message_content}\n</tool_response>\n"
                 )
                 if success:
                     yield ResponseEvent(type="tool_response", content=history_message)
