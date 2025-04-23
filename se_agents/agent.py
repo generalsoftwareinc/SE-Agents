@@ -384,7 +384,7 @@ class Agent:
                 if success:
                     yield ResponseEvent(type="tool_response", content=history_message)
                 if not success:
-                    yield ResponseEvent(type="tool_error", content=tool_result)
+                    yield ResponseEvent(type="tool_error", content=history_message)
                     tool = self._get_tool_by_name(tool_name)
                     if tool:
                         param_info = "\n".join(
