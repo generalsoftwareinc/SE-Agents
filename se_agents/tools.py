@@ -279,32 +279,6 @@ class ExaSearch(ExaSearchBase):
             return "Error: Search failed to return results after handling exceptions."
 
 
-class MockNumberTool(Tool):
-    def __init__(self):
-        super().__init__(
-            name="mock_number_tool",
-            description="A mock tool requiring a number (int or float) parameter.",
-            parameters={
-                "value": {  # Renamed parameter for clarity
-                    "type": "number",
-                    "description": "A number value (integer or float).",
-                    "required": True,
-                }
-            },
-        )
-
-    def execute(self, **kwargs) -> str:
-        params = self._process_parameters(**kwargs)
-        value = params.get("value")
-        if value is None:
-            return "Error: Missing required parameter 'value'"
-        try:
-            num_value = float(value)
-            return f"MockNumberTool executed successfully with value: {num_value}"
-        except ValueError:
-            return f"Error: Parameter 'value' must be a number, received: {value}"
-
-
 class ExaCrawl(Tool):
     def __init__(self, api_key: str):
         super().__init__(
@@ -423,3 +397,55 @@ class ExaSearchContent(ExaSearchBase):
                 raise Exception(f"Error processing search_and_contents results: {e}")
         else:
             return "Error: Search failed to return results after handling exceptions."
+
+
+class MockNumberTool(Tool):
+    def __init__(self):
+        super().__init__(
+            name="mock_number_tool",
+            description="A mock tool requiring a number (int or float) parameter.",
+            parameters={
+                "value": {  # Renamed parameter for clarity
+                    "type": "number",
+                    "description": "A number value (integer or float).",
+                    "required": True,
+                }
+            },
+        )
+
+    def execute(self, **kwargs) -> str:
+        params = self._process_parameters(**kwargs)
+        value = params.get("value")
+        if value is None:
+            return "Error: Missing required parameter 'value'"
+        try:
+            num_value = float(value)
+            return f"MockNumberTool executed successfully with value: {num_value}"
+        except ValueError:
+            return f"Error: Parameter 'value' must be a number, received: {value}"
+
+
+class MockIntTool(Tool):
+    def __init__(self):
+        super().__init__(
+            name="mock_int_tool",
+            description="A mock tool requiring an integer parameter for testing.",
+            parameters={
+                "value": {
+                    "type": "int",
+                    "description": "An integer value.",
+                    "required": True,
+                }
+            },
+        )
+
+    def execute(self, **kwargs) -> str:
+        params = self._process_parameters(**kwargs)
+        value = params.get("value")
+        if value is None:
+            return "Error: Missing required parameter 'value'"
+        try:
+            int_value = int(value)
+            return f"MockIntTool executed successfully with value: {int_value}"
+        except ValueError:
+            return f"Error: Parameter 'value' must be an integer, received: {value}"
