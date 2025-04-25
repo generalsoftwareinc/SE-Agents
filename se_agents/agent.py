@@ -248,130 +248,111 @@ class Agent:
             for token in self._split_tokens(text):
                 yield token
 
-    async def _filter_thinking(
-        self, token_stream: AsyncGenerator[str, None]
-    ) -> AsyncGenerator[ResponseEvent, None]:
-        """
-        Filter the token stream to handle <thinking> blocks.
-
-        When a complete thinking block is detected, emit it as a thinking event.
-        All other tokens are emitted as response events.
-        """
-        buffer = ""
-        halted = False
-        thinking_buffer = ""
-
-        async for token in token_stream:
-            buffer += token
-
-            # If we see a start tag, begin accumulating
-            if not halted and "<thinking>" in buffer:
-                halted = True
-
-            # Accumulate tokens while in halted mode
-            if halted:
-                thinking_buffer += token
-                # Check if thinking block is complete
-                if "</thinking>" in buffer:
-                    # Emit the complete thinking block
-                    yield ResponseEvent(
-                        type="thinking",
-                        content=(
-                            thinking_buffer
-                            if thinking_buffer.endswith("\n")
-                            else thinking_buffer + "\n"
-                        ),
-                    )
-                    # Reset buffers and state
-                    halted = False
-                    thinking_start = buffer.find("<thinking>")
-                    thinking_end = buffer.find("</thinking>") + len("</thinking>")
-                    # Remove the thinking block from the main buffer
-                    buffer = buffer[:thinking_start] + buffer[thinking_end:]
-                    thinking_buffer = ""
-            else:
-                # If not halted, pass through tokens immediately
-                yield ResponseEvent(type="response", content=token)
-
-    async def _filter_tool_calls(
-        self, event_stream: AsyncGenerator[ResponseEvent, None]
-    ) -> AsyncGenerator[ResponseEvent, None]:
-        """
-        Filter response events to handle <tool_call> blocks.
-
-        When a complete tool call is detected, parse and emit it, then stop the stream.
-        """
-        buffer = ""
-        halted = False
-        tool_buffer = ""
-
-        async for event in event_stream:
-            # Only process response events (pass thinking events through unchanged)
-            if event.type == "thinking":
-                yield event
-                continue
-
-            token = event.content
-            buffer += token
-
-            # If we see a start tag, begin accumulating
-            if not halted and "<tool_call>" in buffer:
-                halted = True
-
-            # Accumulate tokens while in halted mode
-            if halted:
-                tool_buffer += token
-                # Check if tool call is complete
-                if "</tool_call>" in buffer:
-                    # Parse the complete tool call
-                    tool_call, error_message, raw_tool_xml = self._parse_tool_call(
-                        buffer
-                    )
-
-                    if error_message:
-                        yield ResponseEvent(
-                            type="tool_error",
-                            content=f"<tool_error>\n{error_message}\n</tool_error>\n",
-                        )
-
-                    if tool_call:
-                        yield ResponseEvent(
-                            type="tool_call", content=raw_tool_xml  # Use raw XML here
-                        )
-                        return  # Stop the stream after a tool call
-
-                    # If there was no valid tool call, reset and continue
-                    halted = False
-                    tool_buffer = ""
-            else:
-                # If not halted, pass through tokens
-                yield event
-
-        # Final newline if needed and not ending with a tag
-        if buffer.strip() and not re.search(r"</[^>]+>\s*$", buffer):
-            yield ResponseEvent(type="response", content="\n")
-
     async def run_stream(self, user_input: str) -> AsyncGenerator[ResponseEvent, None]:
         """Process a user message and yield responses (assistant messages and tool results).
 
-        This method handles tokenization, thinking tags, and tool calls by passing the stream
-        through a series of filters that each handle a specific responsibility.
+        This method handles the conversation loop, including tool calls and user interactions.
+        For the ask_followup_question tool, it yields a special response type that signals
+        the main loop to get user input and then continue the conversation with that input.
         """
         self.messages.append(
             {"role": "user", "content": user_input}
         )  # first message input is not handled by Runner
         self._truncate_context_window()
-
-        # Create the raw LLM response stream
         response = self.client.chat.completions.create(
             model=self.model, messages=self.messages, stream=True
         )
 
-        # Process the stream through each filter in sequence
-        token_stream = self._token_stream(response)
-        thinking_filtered = self._filter_thinking(token_stream)
-        async for event in self._filter_tool_calls(thinking_filtered):
-            yield event
+        full_response = ""
+        tool_call, error_message, raw_tool_xml = (
+            None,
+            None,
+            None,
+        )  # Add raw_tool_xml
+        halted = False
+        tag_found = False
+        thinking_found = False
+        tool_found = False
+        tokens_since_halted = 0
+        halted_tokens = ""
+        async for content in self._token_stream(response):
+            full_response += content
+
+            if "<" in content:
+                halted = True
+
+            if halted:
+                tokens_since_halted += 1
+                halted_tokens += content
+
+                if tokens_since_halted > 5 and not tag_found:
+                    halted = False
+                    tokens_since_halted = 0
+                    content = halted_tokens
+                    tokens_since_halted = 0
+                    yield ResponseEvent(
+                        type="response",
+                        content=halted_tokens,
+                    )
+                    halted_tokens = ""
+                elif (
+                    "<tool_call>" in full_response or "<thinking>" in full_response
+                ) and not tag_found:
+                    tag_found = True
+
+                if tag_found:
+                    if "</tool_call>" in full_response and not tool_found:
+                        tag_found = False
+                        (
+                            tool_call,
+                            error_message,
+                            raw_tool_xml,
+                        ) = self._parse_tool_call(full_response)
+
+                        if error_message:
+                            halted = False
+                            tokens_since_halted = 0
+                            halted_tokens = ""
+                            yield ResponseEvent(
+                                type="tool_error",
+                                content=f"<tool_error>\n{content}\n</tool_error>\n",
+                            )
+                        if tool_call:
+                            tool_found = True
+                            halted = False
+                            tokens_since_halted = 0
+                            halted_tokens = ""
+                            yield ResponseEvent(
+                                type="tool_call",
+                                content=raw_tool_xml,  # Use raw XML here
+                            )
+                            return
+
+                    if "</thinking>" in full_response and not thinking_found:
+                        tag_found = False
+                        thinking_found = True
+                        halted = False
+                        tokens_since_halted = 0
+                        yield ResponseEvent(
+                            type="thinking",
+                            content=(
+                                halted_tokens
+                                if halted_tokens.endswith("\n")
+                                else halted_tokens + "\n"
+                            ),
+                        )
+                        halted_tokens = ""
+
+            else:
+                yield ResponseEvent(
+                    type="response",
+                    content=content,
+                )
+
+        if full_response.strip() and not re.search(r"</[^>]+>\s*$", full_response):
+            yield ResponseEvent(type="response", content="\n")
+
+        # Agent no longer appends assistant responses to its own history
 
     def _get_tool_by_name(self, tool_name: str) -> Optional[Tool]:
         """Return the tool with the given name from self.tools, or None if not found."""
