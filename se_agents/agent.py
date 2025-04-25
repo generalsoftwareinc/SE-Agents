@@ -1,15 +1,10 @@
 import inspect
 import re
 import xml.etree.ElementTree as ET
-from pprint import pprint
 from typing import AsyncGenerator, Dict, List, Optional, Union
 
 from openai import Client
 
-from se_agents.prompts.additional_context import prompt as additional_context_prompt
-from se_agents.prompts.description import prompt as description_prompt
-from se_agents.prompts.tool_calling import prompt as tool_calling_prompt
-from se_agents.prompts.tool_calling import tools_placeholder
 from se_agents.schemas import ResponseEvent
 from se_agents.system_prompt import build_system_prompt
 from se_agents.tools import Tool
@@ -86,13 +81,6 @@ class Agent:
                 for msg in self.messages[1:]:
                     print(f"{msg['role'].capitalize()}: {msg['content'][:100]}...")
                 print("------------------------------------")
-
-    def _section_to_str(self, section):
-        if section is None:
-            return ""
-        if isinstance(section, list):
-            return "\n".join(section)
-        return section
 
     def _add_system_prompt(self):
         full_prompt = build_system_prompt(
@@ -278,9 +266,6 @@ class Agent:
                 parts = re.findall(r"(<|>|\s+|[^\s<>]+)", full_content)
                 # print(f"CONTENT: '{full_content}' ===> PARTS: '{parts}'\n")
                 for content in parts:
-                    if "ing>" in content:
-                        print(f"CONTENT: {content}")
-                        print(f"CONTENT: '{full_content}' ===> PARTS: '{parts}'\n")
                     full_response += content
 
                     if "<" in content:
