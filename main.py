@@ -7,6 +7,7 @@ from email.mime import base
 from dotenv import load_dotenv
 
 from se_agents.agent import Agent
+from se_agents.runner import Runner
 from se_agents.tools import ExaCrawl, ExaSearch, MockNumberTool
 
 load_dotenv(override=True)
@@ -97,6 +98,7 @@ async def main():
     # )
 
     # Reusing the original loop structure for the test agent
+    runner = Runner(agent)
     print("🤖 Starting TEST agent loop...")
     print("Type 'exit' to end the conversation\n")
 
@@ -109,7 +111,7 @@ async def main():
         print(f"\nAssistant: ", end="")  # Modified prompt
         # print(f"\nAssistant ({test_agent.name}): ", end="")  # Modified prompt
 
-        async for response in agent.run_stream(user_input):
+        async for response in runner.run(user_input):
             # Create the generator using the test_agent
             # async for response in test_agent.run_stream(user_input):
             if response.type == "response":
