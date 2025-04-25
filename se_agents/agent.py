@@ -212,9 +212,10 @@ class Agent:
         if not tool:
             return f"Unknown tool: {tool_name}", False
 
-        errors = tool.validate_parameters(params)
-        if errors:
-            return "\n".join(errors), False
+        try:
+            tool._process_parameters(**params)
+        except Exception as e:
+            return str(e), False
 
         try:
             if inspect.iscoroutinefunction(tool.execute):
