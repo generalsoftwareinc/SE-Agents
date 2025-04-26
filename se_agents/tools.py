@@ -32,6 +32,8 @@ class Tool:
             elif param_type == "List[string]":
                 processed_parameters[param] = self._convert_to_list(value)
             elif param_type == "bool":
+                if not isinstance(value, str):
+                    raise ValueError(f"Expected a string for boolean parameter '{param}', but got {type(value).__name__}")
                 boolean_str = value.strip().lower()
                 if boolean_str not in ("true", "false"):
                     raise ValueError(f"{boolean_str} cannot be parsed into boolean")
