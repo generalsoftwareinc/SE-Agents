@@ -8,7 +8,12 @@ from dotenv import load_dotenv
 
 from se_agents.agent import Agent
 from se_agents.runner import Runner
-from se_agents.tools import ExaCrawl, ExaSearch, MockNumberTool
+from se_agents.tools import (  # Added FinalOutput import
+    ExaCrawl,
+    ExaSearch,
+    FinalOutput,
+    MockNumberTool,
+)
 
 load_dotenv(override=True)
 
@@ -61,7 +66,11 @@ async def main():
         api_key=api_key,
         base_url=base_url,
         model=model,
-        tools=[ExaSearch(exa_key), ExaCrawl(exa_key)],
+        tools=[
+            ExaSearch(exa_key),
+            ExaCrawl(exa_key),
+            FinalOutput(),
+        ],  # Added FinalOutput() instance
         # initial_messages=[
         #     {
         #         "role": "user",
@@ -98,8 +107,8 @@ async def main():
     # )
 
     # Reusing the original loop structure for the test agent
-    runner = Runner(agent)
-    print("🤖 Starting TEST agent loop...")
+    runner = Runner(agent, enforce_final=True)  # Enable final output enforcement
+    print("🤖 Starting agent loop (with final output enforcement)...")
     print("Type 'exit' to end the conversation\n")
 
     while True:
