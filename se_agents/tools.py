@@ -33,7 +33,9 @@ class Tool:
                 processed_parameters[param] = self._convert_to_list(value)
             elif param_type == "bool":
                 if not isinstance(value, str):
-                    raise ValueError(f"Expected a string for boolean parameter '{param}', but got {type(value).__name__}")
+                    raise ValueError(
+                        f"Expected a string for boolean parameter '{param}', but got {type(value).__name__}"
+                    )
                 boolean_str = value.strip().lower()
                 if boolean_str not in ("true", "false"):
                     raise ValueError(f"{boolean_str} cannot be parsed into boolean")
@@ -409,3 +411,22 @@ class MockIntTool(Tool):
             return f"MockIntTool executed successfully with value: {int_value}"
         except ValueError:
             return f"Error: Parameter 'value' must be an integer, received: {value}"
+
+
+class FinalOutput(Tool):
+    def __init__(self):
+        super().__init__(
+            name="final_output",
+            description="Use this tool **only** to conclude **your current response cycle**, **after** all other necessary actions (like thinking or using other tools) for **this step** are complete. Provide your complete final response or summary of work done for **this step** in the 'result' parameter. This is required even for simple conversational replies where no other tools were needed.",
+            parameters={
+                "result": {
+                    "type": "string",
+                    "description": "The final result of the task",
+                    "required": True,
+                }
+            },
+        )
+
+    def execute(self, **kwargs) -> str:
+        params = self._process_parameters(**kwargs)
+        return params["result"]
