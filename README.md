@@ -26,9 +26,52 @@ pip install se-agents
     *   `openai>=1.66.3`
     *   `python-dotenv>=1.0.1`
 
-## Quickstart Example
+## Quickstart
 
-This example demonstrates initializing an agent with Exa tools and running a simple query.
+This minimal example shows how to initialize an agent and run a single query.
+
+**Note:** This example assumes your environment variables (`OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `EXA_API_KEY`) are already set in your environment.
+
+```python
+import asyncio
+import os
+
+from se_agents.agent import Agent
+from se_agents.runner import Runner
+from se_agents.tools import ExaSearch # Import desired tools
+
+async def run_query():
+    # Read environment variables
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    model = os.getenv("OPENROUTER_MODEL")
+    exa_key = os.getenv("EXA_API_KEY") # Optional, for Exa tools
+
+    if not api_key or not model:
+        print("Error: OPENROUTER_API_KEY or OPENROUTER_MODEL not set.")
+        return
+
+    # Initialize agent with desired tools
+    agent = Agent(
+        api_key=api_key,
+        model=model,
+        tools=[ExaSearch(exa_key)] if exa_key else [] # Example: Use ExaSearch if key exists
+    )
+    runner = Runner(agent)
+
+    print("Running query: What is the capital of France?")
+    async for event in runner.run("What is the capital of France?"):
+        if event.type == "response":
+            print(event.content, end="", flush=True)
+        # Handle other event types like 'tool_call', 'tool_response' as needed
+    print("\nQuery finished.")
+
+if __name__ == "__main__":
+    asyncio.run(run_query())
+```
+
+## Example: Interactive CLI
+
+This example demonstrates initializing an agent with Exa tools and running an interactive command-line loop (similar to `main.py`).
 
 ```python
 import asyncio
