@@ -15,23 +15,28 @@ class Tool:
         self.parameters = parameters
 
     def _process_parameters(self, **kwargs: dict) -> dict:
-        processed_parameters = {}
+        # Enforce required parameters
+        for name, config in self.parameters.items():
+            if config.get("required", False) and name not in kwargs:
+                raise ValueError(f"Missing required parameter: {name}")
 
+        processed_parameters = {}
         for param, value in kwargs.items():
-            tool_param = self.parameters.get(param, None)
+            tool_param = self.parameters.get(param)
             if not tool_param:
                 raise KeyError(f"{param} is not a parameter of the tool {self.name}")
 
-            if tool_param["type"] == "int":
+            param_type = tool_param.get("type")
+            if param_type == "int":
                 processed_parameters[param] = int(value)
-            elif tool_param["type"] == "List[string]":
-                processed_parameters[param] = self._convert_to_list(value=value)
-            elif tool_param["type"] == "bool":
+            elif param_type == "List[string]":
+                processed_parameters[param] = self._convert_to_list(value)
+            elif param_type == "bool":
+                if not isinstance(value, str):
+                    raise ValueError(f"Expected a string for boolean parameter '{param}', but got {type(value).__name__}")
                 boolean_str = value.strip().lower()
-
                 if boolean_str not in ("true", "false"):
                     raise ValueError(f"{boolean_str} cannot be parsed into boolean")
-
                 processed_parameters[param] = boolean_str == "true"
             else:
                 processed_parameters[param] = value
@@ -63,51 +68,6 @@ class Tool:
             raise ValueError(
                 "Value must be a list of strings or a comma-separated string."
             )
-
-    def validate_parameters(self, params: dict) -> List[str]:
-        errors = []
-        for param_name, config in self.parameters.items():
-            if config.get("required", False) and (
-                param_name not in params or not params[param_name]
-            ):
-                errors.append(f"Missing required parameter: {param_name}")
-            elif param_name in params:
-                param_type = config.get("type", "string")
-                try:
-                    # For basic type checking
-                    if param_type == "string" and not isinstance(
-                        params[param_name], str
-                    ):
-                        errors.append(f"{param_name} must be a string")
-                    elif param_type == "int" and not (
-                        isinstance(params[param_name], int)
-                        or params[param_name].strip().isdigit()
-                    ):
-                        errors.append(f"{param_name} must be an integer")
-                    elif param_type == "number":
-                        val = params[param_name].strip()
-                        is_number = isinstance(val, (int, float))
-                        if isinstance(val, str):
-                            try:
-                                float(val)
-                                is_number = True
-                            except ValueError:
-                                is_number = False
-                        if not is_number:
-                            errors.append(
-                                f"{param_name} must be a number (integer or float)"
-                            )
-                    elif param_type == "bool" and not (
-                        isinstance(params[param_name], bool)
-                        or (
-                            isinstance(params[param_name], str)
-                            and params[param_name].strip().lower() in ("true", "false")
-                        )
-                    ):
-                        errors.append(f"{param_name} must be a boolean")
-                except Exception as e:
-                    errors.append(f"Error validating {param_name}: {str(e)}")
-        return errors
 
     def execute(self, **kwargs) -> str:
         raise NotImplementedError()
@@ -279,32 +239,6 @@ class ExaSearch(ExaSearchBase):
             return "Error: Search failed to return results after handling exceptions."
 
 
-class MockNumberTool(Tool):
-    def __init__(self):
-        super().__init__(
-            name="mock_number_tool",
-            description="A mock tool requiring a number (int or float) parameter.",
-            parameters={
-                "value": {  # Renamed parameter for clarity
-                    "type": "number",
-                    "description": "A number value (integer or float).",
-                    "required": True,
-                }
-            },
-        )
-
-    def execute(self, **kwargs) -> str:
-        params = self._process_parameters(**kwargs)
-        value = params.get("value")
-        if value is None:
-            return "Error: Missing required parameter 'value'"
-        try:
-            num_value = float(value)
-            return f"MockNumberTool executed successfully with value: {num_value}"
-        except ValueError:
-            return f"Error: Parameter 'value' must be a number, received: {value}"
-
-
 class ExaCrawl(Tool):
     def __init__(self, api_key: str):
         super().__init__(
@@ -423,3 +357,55 @@ class ExaSearchContent(ExaSearchBase):
                 raise Exception(f"Error processing search_and_contents results: {e}")
         else:
             return "Error: Search failed to return results after handling exceptions."
+
+
+class MockNumberTool(Tool):
+    def __init__(self):
+        super().__init__(
+            name="mock_number_tool",
+            description="A mock tool requiring a number (int or float) parameter.",
+            parameters={
+                "value": {  # Renamed parameter for clarity
+                    "type": "number",
+                    "description": "A number value (integer or float).",
+                    "required": True,
+                }
+            },
+        )
+
+    def execute(self, **kwargs) -> str:
+        params = self._process_parameters(**kwargs)
+        value = params.get("value")
+        if value is None:
+            return "Error: Missing required parameter 'value'"
+        try:
+            num_value = float(value)
+            return f"MockNumberTool executed successfully with value: {num_value}"
+        except ValueError:
+            return f"Error: Parameter 'value' must be a number, received: {value}"
+
+
+class MockIntTool(Tool):
+    def __init__(self):
+        super().__init__(
+            name="mock_int_tool",
+            description="A mock tool requiring an integer parameter for testing.",
+            parameters={
+                "value": {
+                    "type": "int",
+                    "description": "An integer value.",
+                    "required": True,
+                }
+            },
+        )
+
+    def execute(self, **kwargs) -> str:
+        params = self._process_parameters(**kwargs)
+        value = params.get("value")
+        if value is None:
+            return "Error: Missing required parameter 'value'"
+        try:
+            int_value = int(value)
+            return f"MockIntTool executed successfully with value: {int_value}"
+        except ValueError:
+            return f"Error: Parameter 'value' must be an integer, received: {value}"

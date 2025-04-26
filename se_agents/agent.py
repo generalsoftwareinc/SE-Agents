@@ -1,15 +1,10 @@
 import inspect
 import re
 import xml.etree.ElementTree as ET
-from pprint import pprint
 from typing import AsyncGenerator, Dict, List, Optional, Union
 
 from openai import Client
 
-from se_agents.prompts.additional_context import prompt as additional_context_prompt
-from se_agents.prompts.description import prompt as description_prompt
-from se_agents.prompts.tool_calling import prompt as tool_calling_prompt
-from se_agents.prompts.tool_calling import tools_placeholder
 from se_agents.schemas import ResponseEvent
 from se_agents.system_prompt import build_system_prompt
 from se_agents.tools import Tool
@@ -87,13 +82,6 @@ class Agent:
                     print(f"{msg['role'].capitalize()}: {msg['content'][:100]}...")
                 print("------------------------------------")
 
-    def _section_to_str(self, section):
-        if section is None:
-            return ""
-        if isinstance(section, list):
-            return "\n".join(section)
-        return section
-
     def _add_system_prompt(self):
         full_prompt = build_system_prompt(
             description=self._custom_description,
@@ -123,78 +111,59 @@ class Agent:
                 - error_message: Error message if parsing failed, or None if successful
                 - raw_tool_call_xml: The raw XML string of the tool call, or None if not found/parsed
         """
-        # Look for tool calls inside code blocks first
-        code_block_match = re.search(
-            r"```(?:xml|tool_code)?\s*\n?(.*?)\n?```", message, re.DOTALL
-        )
-        if code_block_match:
-            message = code_block_match.group(1)
 
-        # Skip thinking tags - they're not tool calls
-        if "<thinking>" in message or "</thinking>" in message:
-            # Remove thinking tags and their content for tool parsing (case-insensitive and handles whitespace)
-            message = re.sub(
-                r"<\s*thinking[^>]*>.*?<\s*/\s*thinking\s*>",
-                "",
-                message,
-                flags=re.DOTALL | re.IGNORECASE,
-            )
-
+        # 1. Extract content within <tool_call>...</tool_call> using regex
         tool_call_match = re.search(r"<tool_call>(.*?)</tool_call>", message, re.DOTALL)
-        if tool_call_match:
-            tool_call_content = tool_call_match.group(1)
-            tool_name_match = re.search(
-                r"<([^>]+)>(.*?)</\1>", tool_call_content, re.DOTALL
-            )
-            if tool_name_match:
-                tool_name = tool_name_match.group(1)
-                tool_content = tool_name_match.group(2)
-                raw_tool_call_xml = tool_call_match.group(
-                    0
-                )  # Capture the full <tool_call>...</tool_call>
-            else:
-                return (
-                    None,
-                    "Malformed tool call format. Please use the format: <tool_call><tool_name>...</tool_name></tool_call>",
-                    None,
-                )
-        else:
-            # No <tool_call> tag found
-            return None, None, None
+        if not tool_call_match:
+            return None, None, None  # No tool call found
 
-        # Use the extracted tool_name and tool_content
-        tool = self._get_tool_by_name(tool_name)
-        if not tool:
-            # Add raw_tool_call_xml here as the third return value
-            return None, f"Unknown tool: {tool_name}", raw_tool_call_xml
+        raw_tool_call_xml = tool_call_match.group(0)
+        tool_call_content = tool_call_match.group(1).strip()
 
-        params = {}
+        if not tool_call_content:
+            return None, "Empty tool call content.", raw_tool_call_xml
+
         try:
-            temp_root_str = f"<root>{tool_content}</root>"
-            root = ET.fromstring(temp_root_str)
+            # 2. Parse the extracted content using ElementTree
+            # This assumes the content is well-formed <tool_name>...</tool_name>
+            root = ET.fromstring(tool_call_content)
+            tool_name = root.tag
 
-            expected_params = set(tool.parameters.keys())
-            found_tags = {child.tag for child in root}
-
-            if not found_tags.issubset(expected_params):
-                return (
-                    None,
-                    f"Unexpected parameters in tool call for {tool_name}. Expected: {', '.join(expected_params)}",
-                    raw_tool_call_xml,
-                )
-
+            # 3. Extract parameters
             params = {
                 child.tag: child.text.strip() if child.text else "" for child in root
             }
 
-        except ET.ParseError as e:
-            return (
-                None,
-                f"Malformed XML in tool call: {str(e)} \nPlease check the format.",
-                raw_tool_call_xml,
-            )
+            # 4. Validate tool existence
+            tool = self._get_tool_by_name(tool_name)
+            if not tool:
+                return None, f"Unknown tool: {tool_name}", raw_tool_call_xml
 
-        return {tool_name: params}, None, raw_tool_call_xml
+            # 5. Validate required parameters (optional but good practice)
+            missing_required = []
+            for p_name, p_details in tool.parameters.items():
+                # Access 'required' using dictionary key access with .get() for safety
+                if p_details.get("required", False) and p_name not in params:
+                    missing_required.append(p_name)
+            if missing_required:
+                return (
+                    None,
+                    f"Missing required parameters for {tool_name}: {', '.join(missing_required)}",
+                    raw_tool_call_xml,
+                )
+
+            # Parameter type validation could be added here if needed
+
+            return {tool_name: params}, None, raw_tool_call_xml
+
+        except ET.ParseError as e:
+            print(f"DEBUG _parse_tool_call: XML parse error: {e}")
+            # If ET parsing fails, the XML structure is likely fundamentally broken
+            return None, f"Malformed XML in tool call: {e}", raw_tool_call_xml
+        except Exception as e:
+            # Catch any other unexpected errors during parsing
+            print(f"DEBUG _parse_tool_call: Unexpected error during parsing: {e}")
+            return None, f"Error parsing tool call: {e}", raw_tool_call_xml
 
     async def _execute_tool(
         self, tool_name: str, params: Dict[str, str]
@@ -212,9 +181,10 @@ class Agent:
         if not tool:
             return f"Unknown tool: {tool_name}", False
 
-        errors = tool.validate_parameters(params)
-        if errors:
-            return "\n".join(errors), False
+        try:
+            tool._process_parameters(**params)
+        except Exception as e:
+            return str(e), False
 
         try:
             if inspect.iscoroutinefunction(tool.execute):
@@ -246,6 +216,19 @@ class Agent:
         if self.verbose:
             print(f"===CONTEXT WINDOW TOKEN COUNT: {self.total_token_count}===")
 
+    def _split_tokens(self, content: str) -> List[str]:
+        """Split LLM delta content into elementary tokens for streaming."""
+        return re.findall(r"(<|>|\s+|[^\s<>]+)", content)
+
+    async def _token_stream(self, response) -> AsyncGenerator[str, None]:
+        """Flatten the LLM streaming response into a stream of tokens."""
+        for chunk in response:
+            text = chunk.choices[0].delta.content
+            if not text:
+                continue
+            for token in self._split_tokens(text):
+                yield token
+
     async def run_stream(self, user_input: str) -> AsyncGenerator[ResponseEvent, None]:
         """Process a user message and yield responses (assistant messages and tool results).
 
@@ -253,159 +236,96 @@ class Agent:
         For the ask_followup_question tool, it yields a special response type that signals
         the main loop to get user input and then continue the conversation with that input.
         """
-        self.messages.append({"role": "user", "content": user_input})
-        continue_conversation = True
+        self.messages.append(
+            {"role": "user", "content": user_input}
+        )  # first message input is not handled by Runner
+        self._truncate_context_window()
+        response = self.client.chat.completions.create(
+            model=self.model, messages=self.messages, stream=True
+        )
 
-        while continue_conversation:
-            self._truncate_context_window()
-            response = self.client.chat.completions.create(
-                model=self.model, messages=self.messages, stream=True
-            )
+        full_response = ""
+        tool_call, error_message, raw_tool_xml = (
+            None,
+            None,
+            None,
+        )  # Add raw_tool_xml
+        halted = False
+        tag_found = False
+        thinking_found = False
+        tool_found = False
+        tokens_since_halted = 0
+        halted_tokens = ""
+        async for content in self._token_stream(response):
+            full_response += content
+            if "<" in content:
+                halted = True
 
-            full_response = ""
-            tool_call, error_message, raw_tool_xml = (
-                None,
-                None,
-                None,
-            )  # Add raw_tool_xml
-            halted = False
-            tag_found = False
-            thinking_found = False
-            tool_found = False
-            tokens_since_halted = 0
-            halted_tokens = ""
-            for chunk in response:
-                if chunk.choices[0].delta.content:
-                    full_content = chunk.choices[0].delta.content
-                    parts = re.findall(r"(<|>|\s+|[^\s<>]+)", full_content)
-                    # print(f"CONTENT: '{full_content}' ===> PARTS: '{parts}'\n")
-                    for content in parts:
-                        if "ing>" in content:
-                            print(f"CONTENT: {content}")
-                            print(f"CONTENT: '{full_content}' ===> PARTS: '{parts}'\n")
-                        full_response += content
-
-                        if "<" in content:
-                            halted = True
-
-                        if halted:
-                            tokens_since_halted += 1
-                            halted_tokens += content
-
-                            if tokens_since_halted > 5 and not tag_found:
-                                halted = False
-                                tokens_since_halted = 0
-                                content = halted_tokens
-                                tokens_since_halted = 0
-                                yield ResponseEvent(
-                                    type="response",
-                                    content=halted_tokens,
-                                )
-                                halted_tokens = ""
-                            elif (
-                                "<tool_call>" in full_response
-                                or "<thinking>" in full_response
-                            ) and not tag_found:
-                                tag_found = True
-
-                            if tag_found:
-                                if "</tool_call>" in full_response and not tool_found:
-                                    tag_found = False
-                                    (
-                                        tool_call,
-                                        error_message,
-                                        raw_tool_xml,
-                                    ) = self._parse_tool_call(full_response)
-
-                                    if error_message:
-                                        halted = False
-                                        tokens_since_halted = 0
-                                        halted_tokens = ""
-                                        yield ResponseEvent(
-                                            type="tool_error",
-                                            content=f"<tool_error>\n{content}\n</tool_error>\n",
-                                        )
-                                    if tool_call:
-                                        tool_found = True
-                                        halted = False
-                                        tokens_since_halted = 0
-                                        halted_tokens = ""
-                                        yield ResponseEvent(
-                                            type="tool_call",
-                                            content=raw_tool_xml,  # Use raw XML here
-                                        )
-
-                                if (
-                                    "</thinking>" in full_response
-                                    and not thinking_found
-                                ):
-                                    tag_found = False
-                                    thinking_found = True
-                                    halted = False
-                                    tokens_since_halted = 0
-                                    yield ResponseEvent(
-                                        type="thinking",
-                                        content=(
-                                            halted_tokens
-                                            if halted_tokens.endswith("\n")
-                                            else halted_tokens + "\n"
-                                        ),
-                                    )
-                                    halted_tokens = ""
-
-                        else:
-                            yield ResponseEvent(
-                                type="response",
-                                content=content,
-                            )
-
-            if full_response.strip() and not re.search(r"</[^>]+>\s*$", full_response):
-                yield ResponseEvent(type="response", content="\n")
-
-            if full_response and full_response.strip():
-                self.messages.append({"role": "assistant", "content": full_response})
-            else:
-                continue_conversation = False
+            # Normal response when not halted
+            if not halted:
+                yield ResponseEvent(type="response", content=content)
                 continue
 
-            if error_message:
-                feedback = f"Tool call error: {error_message}\n\nPlease try again with the correct format."
-                self.messages.append({"role": "user", "content": feedback})
-                continue_conversation = True
+            # Accumulate after halt
+            tokens_since_halted += 1
+            halted_tokens += content
 
-            elif tool_call:
-                tool_name = list(tool_call.keys())[0]
-                tool_params = tool_call[tool_name]
+            # Flush buffer if no tag detected within 5 tokens
+            if tokens_since_halted > 5 and not tag_found:
+                yield ResponseEvent(type="response", content=halted_tokens)
+                halted = False
+                tokens_since_halted = 0
+                halted_tokens = ""
+                continue
 
-                tool_result, success = await self._execute_tool(tool_name, tool_params)
+            # Detect start of tag
+            if not tag_found and (
+                "<tool_call>" in full_response or "<thinking>" in full_response
+            ):
+                tag_found = True
 
-                history_message_content = (
-                    tool_result if isinstance(tool_result, str) else str(tool_result)
-                )
-                history_message = (
-                    f"<tool_response>\n{history_message_content}\n</tool_response>\n"
-                )
-                if success:
-                    yield ResponseEvent(type="tool_response", content=history_message)
-                if not success:
-                    yield ResponseEvent(type="tool_error", content=history_message)
-                    tool = self._get_tool_by_name(tool_name)
-                    if tool:
-                        param_info = "\n".join(
-                            [
-                                f"- {name}: {config.get('description', '')} ({'required' if config.get('required') else 'optional'}, type: {config.get('type', 'string')})"
-                                for name, config in tool.parameters.items()
-                            ]
+            # Handle complete tags
+            if tag_found:
+                # Tool call complete
+                if "</tool_call>" in full_response and not tool_found:
+                    tag_found = False
+                    tool_call, error_message, raw_tool_xml = self._parse_tool_call(
+                        full_response
+                    )
+                    if error_message:
+                        error_payload = error_message
+                        if raw_tool_xml:
+                            error_payload += f"\nRaw XML:\n{raw_tool_xml}"
+                        yield ResponseEvent(
+                            type="tool_error",
+                            content=f"<tool_error>\n{error_payload}\n</tool_error>\n",
                         )
-                        hint = f"\nPlease try again with the correct parameters for {tool_name}:\n{param_info}"
-                        history_message += f"\n\n{hint}"
+                        halted = False
+                        tokens_since_halted = 0
+                        halted_tokens = ""
+                        continue
+                    yield ResponseEvent(type="tool_call", content=raw_tool_xml)
+                    return
 
-                self.messages.append({"role": "user", "content": history_message})
+                # Thinking complete
+                if "</thinking>" in full_response and not thinking_found:
+                    tag_found = False
+                    thinking_found = True
+                    thinking_payload = (
+                        halted_tokens
+                        if halted_tokens.endswith("\n")
+                        else halted_tokens + "\n"
+                    )
+                    yield ResponseEvent(type="thinking", content=thinking_payload)
+                    halted = False
+                    tokens_since_halted = 0
+                    halted_tokens = ""
+                    continue
 
-                continue_conversation = True
+        if full_response.strip() and not re.search(r"</[^>]+>\s*$", full_response):
+            yield ResponseEvent(type="response", content="\n")
 
-            else:
-                continue_conversation = False
+        # Agent no longer appends assistant responses to its own history
 
     def _get_tool_by_name(self, tool_name: str) -> Optional[Tool]:
         """Return the tool with the given name from self.tools, or None if not found."""
