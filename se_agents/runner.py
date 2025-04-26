@@ -17,41 +17,41 @@ class Runner:
         """
         next_input = user_input
         while True:
-            tool_called = False
-            # Stream until the Agent requests a tool or finishes
+            tool_event_occurred = False
             async for event in self.agent.run_stream(next_input):
-                if event.type == "tool_call":
-                    tool_called = True
-                    yield event
+                yield event
 
-                    # Parse the tool call XML
+                if event.type == "tool_call":
+                    tool_event_occurred = True
                     tool_call_dict, error_msg, _ = self.agent._parse_tool_call(
                         event.content
                     )
+
                     if error_msg or not tool_call_dict:
-                        yield ResponseEvent(
-                            type="tool_error",
-                            content=error_msg or "Failed to parse tool call",
-                        )
-                        # send parse error back into agent loop via next_input
-                        next_input = f"<tool_error>\n{error_msg or 'Failed to parse tool call'}\n</tool_error>\n"
+                        error_content = f"<tool_error>\nRunner failed to parse agent's yielded tool_call XML: {error_msg or 'Parse failure'}\nRaw XML:\n{event.content}\n</tool_error>\n"
+                        yield ResponseEvent(type="tool_error", content=error_content)
+                        next_input = error_content
                         break
 
                     tool_name = next(iter(tool_call_dict))
                     params = tool_call_dict[tool_name]
 
-                    # Execute the tool
                     result, success = await self.agent._execute_tool(tool_name, params)
-                    # Wrap result in the XML expected by the Agent
-                    xml_response = f"<tool_response>\n{result}\n</tool_response>\n"
-                    yield ResponseEvent(type="tool_response", content=xml_response)
 
-                    # send tool response back into agent loop via next_input
-                    next_input = xml_response
+                    if success:
+                        next_input = f"<tool_response>\n{result}\n</tool_response>\n"
+                        # Yield the tool_response event so it can be displayed
+                        yield ResponseEvent(type="tool_response", content=next_input)
+                    else:
+                        next_input = f"<tool_error>\nTool execution failed: {result}\n</tool_error>\n"
+                        yield ResponseEvent(type="tool_error", content=next_input)
+
+                    break  # Still break to feed the response back to the agent
+
+                elif event.type == "tool_error":
+                    tool_event_occurred = True
+                    next_input = event.content
                     break
-                else:
-                    yield event
 
-            # If no tool was called in this pass, the Agent is done
-            if not tool_called:
+            if not tool_event_occurred:
                 break
