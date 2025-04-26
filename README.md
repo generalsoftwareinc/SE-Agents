@@ -13,7 +13,7 @@
 ## Installation & Requirements
 
 ```bash
-pip install se-agents
+pip install git+https://github.com/generalsoftwareinc/SE-Agents.git
 ```
 
 **Requirements:**
@@ -239,7 +239,10 @@ The framework includes several pre-built tools:
 
 Based on initial TODOs:
 
-*   [ ] Limit agent loop iterations to a configurable number `n`. This requires logic in the `Runner` and potentially prompting the model to conclude its task within the limit.
+- [ ] Limit agent loop iterations to a configurable number `n`. This requires logic in the `Runner` and potentially prompting the model to conclude its task within the limit.
+- [ ] Implement final-output tool to allow the agent to close the loop. Include 'enforce final-output tool' option in the `Runner` constructor, which will prompt the model to conclude the task using the final-output tool. This will change current behavior of the 'response' event. Instead of all non-tool responses being yielded as events, only the final response will be yielded. If no final-output tool is found, the Runner will re run the Agent, prompting the model to conclude the task using the final-output tool.
+- [ ] Refactor block \<thinking> and event handling as a tool, following the pattern described by the [Anthropic documentation](https://www.anthropic.com/engineering/claude-think-tool).
+
 
 ## License
 
