@@ -12,7 +12,9 @@ from se_agents.tools import (  # Added FinalOutput import
     ExaCrawl,
     ExaSearch,
     FinalOutput,
+    FireCrawlFetchPage,
     MockNumberTool,
+    ThinkTool,
 )
 
 load_dotenv(override=True)
@@ -68,8 +70,10 @@ async def main():
         model=model,
         tools=[
             ExaSearch(exa_key),
-            ExaCrawl(exa_key),
+            # ExaCrawl(exa_key),
+            FireCrawlFetchPage(firecrawl_key),
             FinalOutput(),
+            ThinkTool(),
         ],  # Added FinalOutput() instance
         # initial_messages=[
         #     {
@@ -82,6 +86,8 @@ async def main():
         verbose=True,
         rules=rules,
         add_default_rules=False,
+        add_think_instructions=True,
+        add_final_output_instructions=True,
     )
 
     # agent.messages.append(
@@ -126,12 +132,6 @@ async def main():
             if response.type == "response":
                 print(
                     response.content,
-                    end="",
-                    flush=True,
-                )
-            elif response.type == "thinking":
-                print(
-                    f"{GRAY}{response.content}{RESET}",
                     end="",
                     flush=True,
                 )
