@@ -413,6 +413,30 @@ class MockIntTool(Tool):
             return f"Error: Parameter 'value' must be an integer, received: {value}"
 
 
+class ThinkTool(Tool):
+    def __init__(self):
+        super().__init__(
+            name="think",
+            description="Use the tool to think about something. It will not obtain new information or change the database, but just append the thought to the log. Use it when complex reasoning or some cache memory is needed.",
+            parameters={
+                "thought": {
+                    "type": "string",
+                    "description": "A thought to think about.",
+                    "required": True,
+                }
+            },
+        )
+
+    def execute(self, **kwargs) -> str:
+        # This tool doesn't *do* anything other than signal thinking.
+        # The Runner intercepts this call.
+        # We return a simple confirmation.
+        params = self._process_parameters(**kwargs)
+        thought = params.get("thought", "")
+        # Optional: Could return the thought itself, but a simple confirmation is cleaner.
+        return f"Thought logged: {thought}"
+
+
 class FinalOutput(Tool):
     def __init__(self):
         super().__init__(

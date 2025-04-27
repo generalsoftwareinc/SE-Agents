@@ -4,7 +4,7 @@
 
 ## Key Features
 
-*   **Pluggable Tools**: Easily integrate external tools like web search (Exa, DuckDuckGo), page crawling (Exa, Firecrawl), or custom functions.
+*   **Pluggable Tools**: Easily integrate external tools like web search (Exa, DuckDuckGo), page crawling (Exa, Firecrawl), or custom functions. Includes built-in tools for thinking (`ThinkTool`) and signaling final output (`FinalOutput`).
 *   **Streaming Responses**: Handles asynchronous streaming of LLM responses and tool events.
 *   **Customizable System Prompts**: Fine-tune agent behavior through configurable descriptions, rules, objectives, and instructions.
 *   **Context Management**: Automatically truncates conversation history to fit within token limits.
@@ -128,12 +128,12 @@ async def main():
         # Run the query and process events
         async for response in runner.run(user_input):
             if response.type == "response":
+                # This will typically contain the final output when enforce_final=True,
+                # or intermediate text otherwise.
                 print(response.content, end="", flush=True)
-            elif response.type == "thinking":
-                # Optional: Display thinking steps (requires verbose=True in Agent)
-                # print(f"\033[90m{response.content}\033[0m", end="", flush=True)
-                pass # Thinking steps are often internal
+            # Note: 'thinking' is now handled via ThinkTool, resulting in 'tool_call' and 'tool_response' events.
             elif response.type == "tool_call":
+                # Includes calls to ThinkTool, FinalOutput, and others.
                 print(f"\n\n\033[92m🟡 Tool Call:\n{response.content}\033[0m\n")
             elif response.type == "tool_response":
                 print(f"\n\n\033[94m🟢 Tool Response:\n{response.content}\033[0m\n")
@@ -169,11 +169,11 @@ The framework relies on environment variables for API keys and model configurati
     *   Calls the `Agent.run_stream` method.
     *   Handles `tool_call` events by executing the corresponding tool via `Agent._execute_tool`.
     *   Feeds `tool_response` or `tool_error` back into the `Agent` for the next LLM turn.
-    *   Yields all `ResponseEvent` objects to the caller.
+    *   Yields `ResponseEvent` objects to the caller. Can optionally enforce the use of the `FinalOutput` tool via the `enforce_final` constructor argument.
 *   **`ResponseEvent`**: A Pydantic model defining the structure of events yielded by the `Runner`:
-    *   `type`: "response", "thinking", "tool_call", "tool_response", "tool_error"
+    *   `type`: "response", "tool_call", "tool_response", "tool_error" (Note: "thinking" is handled as a standard tool call/response).
     *   `content`: The associated text or XML payload.
-*   **`Tool`**: Base class for all tools. Subclasses implement specific functionalities (e.g., web search, page crawl) and define their `name`, `description`, and `parameters`.
+*   **`Tool`**: Base class for all tools. Subclasses implement specific functionalities (e.g., web search, page crawl, thinking, final output) and define their `name`, `description`, and `parameters`.
 
 ## Built-in Tools
 
@@ -191,6 +191,10 @@ The framework includes several pre-built tools:
     *   *Parameters*: `url` (required).
 *   **`MockNumberTool` / `MockIntTool`**: Simple tools for testing parameter handling (float/integer).
     *   *Parameters*: `value` (required).
+*   **`ThinkTool`**: Allows the agent to perform internal reasoning steps. The Runner intercepts this tool call.
+    *   *Parameters*: `thought` (required).
+*   **`FinalOutput`**: Signals the end of the agent's response cycle for a given input. Used especially when `enforce_final` is enabled in the `Runner`.
+    *   *Parameters*: `result` (required).
 
 ## Advanced Usage
 
@@ -241,7 +245,7 @@ Based on initial TODOs:
 
 - [ ] Limit agent loop iterations to a configurable number `n`. This requires logic in the `Runner` and potentially prompting the model to conclude its task within the limit.
 - [x] Implement final-output tool to allow the agent to close the loop. Include 'enforce final-output tool' option in the `Runner` constructor, which will prompt the model to conclude the task using the final-output tool. This will change current behavior of the 'response' event. Instead of all non-tool responses being yielded as events, only the final response will be yielded. If no final-output tool is found, the Runner will re run the Agent, prompting the model to conclude the task using the final-output tool.
-- [ ] Refactor block \<thinking> and event handling as a tool, following the pattern described by the [Anthropic documentation](https://www.anthropic.com/engineering/claude-think-tool).
+- [x] Refactor block \<thinking> and event handling as a tool (`ThinkTool`), following the pattern described by the [Anthropic documentation](https://www.anthropic.com/engineering/claude-think-tool).
 
 
 ## License

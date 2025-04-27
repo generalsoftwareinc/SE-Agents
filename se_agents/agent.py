@@ -249,10 +249,9 @@ class Agent:
             None,
             None,
             None,
-        )  # Add raw_tool_xml
+        )
         halted = False
         tag_found = False
-        thinking_found = False
         tool_found = False
         tokens_since_halted = 0
         halted_tokens = ""
@@ -279,9 +278,8 @@ class Agent:
                 continue
 
             # Detect start of tag
-            if not tag_found and (
-                "<tool_call>" in full_response or "<thinking>" in full_response
-            ):
+            # Only look for tool_call now
+            if not tag_found and "<tool_call>" in full_response:
                 tag_found = True
 
             # Handle complete tags
@@ -307,22 +305,10 @@ class Agent:
                     yield ResponseEvent(type="tool_call", content=raw_tool_xml)
                     return
 
-                # Thinking complete
-                if "</thinking>" in full_response and not thinking_found:
-                    tag_found = False
-                    thinking_found = True
-                    thinking_payload = (
-                        halted_tokens
-                        if halted_tokens.endswith("\n")
-                        else halted_tokens + "\n"
-                    )
-                    yield ResponseEvent(type="thinking", content=thinking_payload)
-                    halted = False
-                    tokens_since_halted = 0
-                    halted_tokens = ""
-                    continue
+                # Removed thinking block handling - will be handled as a normal tool call
 
-        if full_response.strip() and not re.search(r"</[^>]+>\s*$", full_response):
+        # Ensure final newline if response doesn't end cleanly with a tag
+        if full_response.strip() and not re.search(r"</tool_call>\s*$", full_response):
             yield ResponseEvent(type="response", content="\n")
 
         # Agent no longer appends assistant responses to its own history

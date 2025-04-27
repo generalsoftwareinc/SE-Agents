@@ -53,10 +53,10 @@ CRITICAL: Always wrap your tool calls in <tool_call></tool_call> tags. DO NOT WR
 
 # Tool Use Guidelines
 
-1. In <thinking> tags, assess what information you already have and what information you need to proceed with the task. Make sure to open and close the tag when the thinking is complete.
-2. Choose the most appropriate tool based on the task and the tool descriptions provided. Assess if you need additional information to proceed, and which of the available tools would be most effective for gathering this information. For example using the list_files tool is more effective than running a command like `ls` in the terminal. It's critical that you think about each available tool and use the one that best fits the current step in the task.
-3. If multiple actions are needed, use one tool at a time per message to accomplish the task iteratively, with each tool use being informed by the result of the previous tool use. Do not assume the outcome of any tool use. Each step must be informed by the previous step's result.
-4. Formulate your tool use using the XML format specified for each tool. Always wrap them inside the block <tool_call></tool_call>.
+1. Use the `think` tool (within a `<tool_call>` block) to assess information, plan your approach, and decide which other tools are needed for the task. This replaces the previous use of `<thinking>` tags.
+2. Choose the most appropriate tool (other than `think`) based on the task and the tool descriptions provided, informed by your analysis in the `think` step. Assess if you need additional information to proceed. For example, using the `list_files` tool is more effective than running `ls`.
+3. If multiple actions (including thinking) are needed, use one tool call at a time per message to accomplish the task iteratively. Each tool use should be informed by the result of the previous one (including the confirmation from the `think` tool). Do not assume the outcome of any tool use.
+4. Formulate your tool use using the XML format specified for each tool. Always wrap them inside the block `<tool_call></tool_call>`.
 5. After each tool use, the user will respond with the result of that tool use, this tool response will be wrapped inside <tool_response> tags if successful. This result will provide you with the necessary information to continue your task or make further decisions. This response may include:
   - Information about whether the tool succeeded or failed, along with any reasons for failure.
   - Validation errors that may have arisen due to the changes you made, which you'll need to address.

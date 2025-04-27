@@ -13,6 +13,7 @@ from se_agents.tools import (  # Added FinalOutput import
     ExaSearch,
     FinalOutput,
     MockNumberTool,
+    ThinkTool,
 )
 
 load_dotenv(override=True)
@@ -70,6 +71,7 @@ async def main():
             ExaSearch(exa_key),
             ExaCrawl(exa_key),
             FinalOutput(),
+            ThinkTool(),
         ],  # Added FinalOutput() instance
         # initial_messages=[
         #     {

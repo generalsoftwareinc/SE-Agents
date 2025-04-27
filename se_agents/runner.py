@@ -69,9 +69,6 @@ class Runner:
                     next_input = event.content
                     break
 
-                elif event.type == "thinking":
-                    yield event
-
                 elif event.type == "response":
                     if self.enforce_final:
                         buffered_response += event.content
