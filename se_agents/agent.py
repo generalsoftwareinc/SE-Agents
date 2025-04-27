@@ -30,7 +30,7 @@ class Agent:
         objective: Union[str, List[str], None] = None,
         instructions: Union[str, List[str], None] = None,
         additional_context: Union[str, List[str], None] = None,
-        add_tool_instrutions: bool = True,
+        add_tool_instructions: bool = True,
         add_default_rules: bool = True,
         add_default_objective: bool = True,
         # Prompt config additions
@@ -63,7 +63,7 @@ class Agent:
         self._custom_objective = objective
         self._custom_instructions = instructions
         self._additional_context = additional_context
-        self.add_tool_instrutions = add_tool_instrutions
+        self.add_tool_instrutions = add_tool_instructions
         self.add_default_rules = add_default_rules
         self.add_default_objective = add_default_objective
         self.add_think_instructions = add_think_instructions
