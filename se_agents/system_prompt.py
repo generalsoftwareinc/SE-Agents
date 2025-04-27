@@ -3,6 +3,7 @@ from se_agents.prompts.custom_instructions import prompt as custom_instructions_
 from se_agents.prompts.description import prompt as description_prompt
 from se_agents.prompts.objective import prompt as objective_prompt
 from se_agents.prompts.rules import prompt as rules_prompt
+from se_agents.prompts.think import prompt as think_prompt
 from se_agents.prompts.tool_calling import prompt as tool_calling_prompt
 
 
@@ -65,6 +66,8 @@ def build_system_prompt(
     additional_context=None,
     # Custom instructions (not rules/objective)
     custom_instructions=None,
+    # Think instructions
+    add_think_instructions: bool = False,
 ):
     """
     Build the full system prompt from all config values.
@@ -119,14 +122,18 @@ def build_system_prompt(
             else custom_objective
         )
 
+    # THINKING PROCESS section
+    think_section = think_prompt if add_think_instructions else ""
+
     # Compose the full prompt in the correct order, without extra section headers
     sections = [
         description_section,
         tool_calling_section,
         tools_section,
-        additional_context_section,
+        think_section,
         rules_section,
         objective_section,
+        additional_context_section,
     ]
     full_prompt = ""
     for content in sections:
