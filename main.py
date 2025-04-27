@@ -12,6 +12,7 @@ from se_agents.tools import (  # Added FinalOutput import
     ExaCrawl,
     ExaSearch,
     FinalOutput,
+    FireCrawlFetchPage,
     MockNumberTool,
     ThinkTool,
 )
@@ -69,7 +70,8 @@ async def main():
         model=model,
         tools=[
             ExaSearch(exa_key),
-            ExaCrawl(exa_key),
+            # ExaCrawl(exa_key),
+            FireCrawlFetchPage(firecrawl_key),
             FinalOutput(),
             ThinkTool(),
         ],  # Added FinalOutput() instance
@@ -84,6 +86,8 @@ async def main():
         verbose=True,
         rules=rules,
         add_default_rules=False,
+        add_think_instructions=True,
+        add_final_output_instructions=True,
     )
 
     # agent.messages.append(

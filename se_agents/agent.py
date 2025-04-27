@@ -33,6 +33,9 @@ class Agent:
         add_tool_instrutions: bool = True,
         add_default_rules: bool = True,
         add_default_objective: bool = True,
+        # Prompt config additions
+        add_think_instructions: bool = False,
+        add_final_output_instructions: bool = False,
         # Message config
         initial_messages: Optional[List[Dict[str, str]]] = None,
         # Verbose config
@@ -58,11 +61,13 @@ class Agent:
         self._custom_description = description
         self._custom_rules = rules
         self._custom_objective = objective
+        self._custom_instructions = instructions
+        self._additional_context = additional_context
         self.add_tool_instrutions = add_tool_instrutions
         self.add_default_rules = add_default_rules
         self.add_default_objective = add_default_objective
-        self._custom_instructions = instructions
-        self._additional_context = additional_context
+        self.add_think_instructions = add_think_instructions
+        self.add_final_output_instructions = add_final_output_instructions
 
         # Message config
         system_message = self._add_system_prompt()
@@ -93,6 +98,8 @@ class Agent:
             add_default_objective=self.add_default_objective,
             additional_context=self._additional_context,
             custom_instructions=self._custom_instructions,
+            add_think_instructions=self.add_think_instructions,
+            add_final_output_instructions=self.add_final_output_instructions,
         )
         return {
             "role": "system",
@@ -307,9 +314,22 @@ class Agent:
 
                 # Removed thinking block handling - will be handled as a normal tool call
 
-        # Ensure final newline if response doesn't end cleanly with a tag
-        if full_response.strip() and not re.search(r"</tool_call>\s*$", full_response):
-            yield ResponseEvent(type="response", content="\n")
+        # --- After the stream loop finishes ---
+        print(f"Stream finished. Final accumulated content: {full_response}")
+
+        # Check if the stream ended while inside an unclosed tool_call tag
+        if tag_found:
+            print("Stream ended with an unclosed <tool_call> tag.")
+            yield ResponseEvent(
+                type="tool_error",
+                content=f"<tool_error>\nStream ended unexpectedly within a tool_call block. </tool_call> closing tag not found. Incomplete XML:\n{halted_tokens}\n</tool_error>\n",
+            )
+        elif halted and not tool_found and not tag_found:
+            # If we halted (saw '<') but never found a complete tag or ended inside one, yield the buffered content as response
+            print(
+                f"Stream ended after halting, flushing remaining buffer: {halted_tokens}"
+            )
+            yield ResponseEvent(type="response", content=halted_tokens)
 
         # Agent no longer appends assistant responses to its own history
 

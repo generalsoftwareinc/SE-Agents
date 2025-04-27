@@ -155,6 +155,8 @@ The framework relies on environment variables for API keys and model configurati
 | `OPENROUTER_BASE_URL`| (Optional) Custom API base URL             | No       | OpenAI default |
 | `EXA_API_KEY`       | (Optional) API key for Exa AI tools        | No       | -       |
 | `FIRECRAWL_API_KEY` | (Optional) API key for Firecrawl tools     | No       | -       |
+| `add_think_instructions` | (Optional) Boolean to include THINKING PROCESS instructions in the system prompt. | No | `False` |
+| `add_final_output_instructions` | (Optional) Boolean to include FINAL OUTPUT INSTRUCTIONS in the system prompt. | No | `False` |
 
 ## Core Concepts
 
@@ -198,7 +200,7 @@ The framework includes several pre-built tools:
 
 ## Advanced Usage
 
-*   **Customizing System Prompts**: The `Agent` constructor accepts parameters like `description`, `rules`, `objective`, `instructions`, and `additional_context` to modify the default system prompt. Flags like `add_default_rules=False` allow complete replacement of sections.
+*   **Customizing System Prompts**: The `Agent` constructor accepts parameters like `description`, `rules`, `objective`, `instructions`, and `additional_context` to modify the default system prompt. Flags like `add_default_rules=False` allow complete replacement of sections. You can also include specific instructions for thinking steps (`add_think_instructions=True`) and the final output process (`add_final_output_instructions=True`).
 *   **Verbose Mode**: Setting `verbose=True` when creating an `Agent` instance prints the constructed system prompt and context window management details to the console, aiding in debugging prompt logic.
 *   **Adding Custom Tools**: Create a new class inheriting from `se_agents.tools.Tool`, define `name`, `description`, `parameters`, and implement the `execute` method. Pass an instance of your custom tool to the `tools` list during `Agent` initialization.
 

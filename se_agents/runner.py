@@ -85,10 +85,9 @@ class Runner:
                 elif tool_event:
                     continue
                 else:
+                    print("No final output found, retrying with feedback")
                     reprompt_message = "You did not conclude the task using the 'final_output' tool. Please provide the final result using the 'final_output' tool now."
-                    next_input = (
-                        f"<system_reprompt>\n{reprompt_message}\n</system_reprompt>\n"
-                    )
+                    next_input = f"<feedback>\n{reprompt_message}\n</feedback>\n"
                     continue
             else:
                 if not tool_event:
