@@ -1,3 +1,4 @@
+from abc import abstractmethod
 import time
 from typing import List
 
@@ -446,6 +447,45 @@ class ThinkTool(Tool):
         thought = params.get("thought", "")
         return f"Thought logged: {thought}"
 
+
+class VisionBaseTool(Tool):
+    _accepted_formats = ["png", "jpg", "jpeg", "webp"]
+
+    def __init__(self, name=None, description=None, parameters=None):
+        name = "vision_tool" if not name else name
+
+        super().__init__(
+            name=name,
+            description="Use the tool to interpret images uploaded by the user and perform classification and object detection tasks",
+            parameters={
+                "image": {
+                    "type": "string",
+                    "description": "An valid image formatted file or a url that gets an image",
+                    "required": True,
+                }
+            },
+        )
+
+    @abstractmethod
+    @property
+    def ACCEPTED_FORMATS(self) -> List[str]:
+        return self._accepted_formats
+
+    def _process_parameters(self, **kwargs):
+
+        image_param: str = kwargs.get("image")
+
+        if not image_param:
+            raise KeyError(f"The {self.name} tool requires the 'image' parameter.")
+
+        if any(
+            [image_param.strip().endswith(fmt) for fmt in self._accepted_formats]
+        ):  # the image is passed as a file
+            return {"type": "base64", "data": "data:image/jpeg;base64,{base64_image}"}
+        elif image_param.strip().startswith("http"):  # the image is passed as a link
+            return {"type": "url", "data": image_param}
+        else:
+            raise ValueError("The image format ")
 
 class FinalOutput(Tool):
     def __init__(self):
