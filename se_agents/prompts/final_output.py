@@ -9,3 +9,4 @@ The `final_output` tool should be used to:
 2. Summarize the work completed in this step  
 3. Provide any concluding remarks or next steps
 4. Avoid leaving the conversation open-ended - make your response final and complete
+"""
