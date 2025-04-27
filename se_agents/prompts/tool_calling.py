@@ -53,16 +53,15 @@ CRITICAL: Always wrap your tool calls in <tool_call></tool_call> tags. DO NOT WR
 
 # Tool Use Guidelines
 
-1. Use the `think` tool (within a `<tool_call>` block) to assess information, plan your approach, and decide which other tools are needed for the task. This replaces the previous use of `<thinking>` tags.
-2. Choose the most appropriate tool (other than `think`) based on the task and the tool descriptions provided, informed by your analysis in the `think` step. Assess if you need additional information to proceed. For example, using the `list_files` tool is more effective than running `ls`.
-3. If multiple actions (including thinking) are needed, use one tool call at a time per message to accomplish the task iteratively. Each tool use should be informed by the result of the previous one (including the confirmation from the `think` tool). Do not assume the outcome of any tool use.
-4. Formulate your tool use using the XML format specified for each tool. Always wrap them inside the block `<tool_call></tool_call>`.
-5. After each tool use, the user will respond with the result of that tool use, this tool response will be wrapped inside <tool_response> tags if successful. This result will provide you with the necessary information to continue your task or make further decisions. This response may include:
+1. Choose the most appropriate tool based on the task and the tool descriptions provided. Assess if you need additional information to proceed. For example, using the `list_files` tool is more effective than running `ls`.
+2. If multiple actions are needed, use one tool call at a time per message to accomplish the task iteratively. Each tool use should be informed by the result of the previous one. Do not assume the outcome of any tool use.
+3. Formulate your tool use using the XML format specified for each tool. Always wrap them inside the block `<tool_call></tool_call>`.
+4. After each tool use, the user will respond with the result of that tool use, this tool response will be wrapped inside <tool_response> tags if successful. This result will provide you with the necessary information to continue your task or make further decisions. This response may include:
   - Information about whether the tool succeeded or failed, along with any reasons for failure.
   - Validation errors that may have arisen due to the changes you made, which you'll need to address.
   - New terminal output in reaction to the changes, which you may need to consider or act upon.
   - Any other relevant feedback or information related to the tool use.
-6. ALWAYS wait for user confirmation after each tool use before proceeding. Never assume the success of a tool use without explicit confirmation of the result from the user.
+5. ALWAYS wait for user confirmation after each tool use before proceeding. Never assume the success of a tool use without explicit confirmation of the result from the user.
 
 It is crucial to proceed step-by-step, waiting for the user's message after each tool use before moving forward with the task. This approach allows you to:
 1. Confirm the success of each step before proceeding.
