@@ -131,12 +131,6 @@ async def main():
                     end="",
                     flush=True,
                 )
-            elif response.type == "thinking":
-                print(
-                    f"{GRAY}{response.content}{RESET}",
-                    end="",
-                    flush=True,
-                )
             elif response.type == "tool_call":
                 print(f"\n\n{GREEN}🟡 {response.content}{RESET}\n")
             elif response.type == "tool_response":
