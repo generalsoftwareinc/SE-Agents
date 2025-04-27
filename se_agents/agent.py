@@ -108,52 +108,53 @@ class Agent:
 
     def _parse_tool_call(
         self, message: str
-    ) -> tuple[Optional[Dict[str, Dict[str, str]]], Optional[str], Optional[str]]:
+    ) -> tuple[Optional[str], Optional[Dict[str, str]], Optional[str], Optional[str]]:
         """Parse XML-formatted tool calls from the assistant's message.
-        Handles tool calls both directly in the message and inside code blocks.
+        Searches for a top-level XML tag matching a known tool name.
 
         Returns:
-            tuple: (tool_call_dict, error_message, raw_tool_call_xml)
-                - tool_call_dict: Dictionary with tool name as key and parameters as values, or None if parsing failed
+            tuple: (tool_name, params_dict, error_message, raw_tool_call_xml)
+                - tool_name: The name of the tool called, or None if not found/parsed
+                - params_dict: Dictionary with parameters, or None if parsing failed
                 - error_message: Error message if parsing failed, or None if successful
                 - raw_tool_call_xml: The raw XML string of the tool call, or None if not found/parsed
         """
+        raw_tool_call_xml = None
+        tool_name = None
+        tool_call_content = None
+        tool = None  # Keep tool variable for later use
 
-        # 1. Extract content within <tool_call>...</tool_call> using regex
-        tool_call_match = re.search(r"<tool_call>(.*?)</tool_call>", message, re.DOTALL)
-        if not tool_call_match:
-            return None, None, None  # No tool call found
+        for t in self.tools:
+            m = re.search(rf"<{t.name}>(.*?)</{t.name}>", message, re.DOTALL)
+            if m:
+                raw_tool_call_xml = m.group(0)
+                tool_call_content = m.group(1).strip()
+                tool_name = t.name
+                tool = t  # Assign the found tool
+                break
 
-        raw_tool_call_xml = tool_call_match.group(0)
-        tool_call_content = tool_call_match.group(1).strip()
-
-        if not tool_call_content:
-            return None, "Empty tool call content.", raw_tool_call_xml
+        if not raw_tool_call_xml:
+            # No tool call found matching a known tool name
+            return None, None, None, None
 
         try:
-            # 2. Parse the extracted content using ElementTree
-            # This assumes the content is well-formed <tool_name>...</tool_name>
-            root = ET.fromstring(tool_call_content)
-            tool_name = root.tag
+            # Parse the extracted content using ElementTree
+            root = ET.fromstring(raw_tool_call_xml)
 
-            # 3. Extract parameters
-            params = {
-                child.tag: child.text.strip() if child.text else "" for child in root
-            }
+            # Extract parameters
+            params = {}
+            for child in root:
+                params[child.tag] = child.text.strip() if child.text else ""
 
-            # 4. Validate tool existence
-            tool = self._get_tool_by_name(tool_name)
-            if not tool:
-                return None, f"Unknown tool: {tool_name}", raw_tool_call_xml
-
-            # 5. Validate required parameters (optional but good practice)
+            # Validate required parameters
             missing_required = []
+            # Use the 'tool' variable found in the loop
             for p_name, p_details in tool.parameters.items():
-                # Access 'required' using dictionary key access with .get() for safety
                 if p_details.get("required", False) and p_name not in params:
                     missing_required.append(p_name)
             if missing_required:
                 return (
+                    None,
                     None,
                     f"Missing required parameters for {tool_name}: {', '.join(missing_required)}",
                     raw_tool_call_xml,
@@ -161,16 +162,24 @@ class Agent:
 
             # Parameter type validation could be added here if needed
 
-            return {tool_name: params}, None, raw_tool_call_xml
+            return tool_name, params, None, raw_tool_call_xml
 
         except ET.ParseError as e:
             print(f"DEBUG _parse_tool_call: XML parse error: {e}")
-            # If ET parsing fails, the XML structure is likely fundamentally broken
-            return None, f"Malformed XML in tool call: {e}", raw_tool_call_xml
+            return (
+                None,
+                None,
+                f"Malformed XML for tool call {tool_name}: {e}",
+                raw_tool_call_xml,
+            )
         except Exception as e:
-            # Catch any other unexpected errors during parsing
             print(f"DEBUG _parse_tool_call: Unexpected error during parsing: {e}")
-            return None, f"Error parsing tool call: {e}", raw_tool_call_xml
+            return (
+                None,
+                None,
+                f"Error parsing tool call {tool_name}: {e}",
+                raw_tool_call_xml,
+            )
 
     async def _execute_tool(
         self, tool_name: str, params: Dict[str, str]
@@ -252,11 +261,10 @@ class Agent:
         )
 
         full_response = ""
-        tool_call, error_message, raw_tool_xml = (
-            None,
-            None,
-            None,
-        )
+        tool_name = None
+        params = None
+        error_message = None
+        raw_tool_xml = None
         halted = False
         tag_found = False
         tool_found = False
@@ -284,19 +292,29 @@ class Agent:
                 halted_tokens = ""
                 continue
 
-            # Detect start of tag
-            # Only look for tool_call now
-            if not tag_found and "<tool_call>" in full_response:
-                tag_found = True
+            # Detect start of tool tag
+            if not tag_found:
+                for t in self.tools:
+                    if f"<{t.name}>" in full_response:
+                        tag_found = True
+                        break
 
             # Handle complete tags
             if tag_found:
+                # print("----- Tag found -----")
+                # print("Starting to parse tool call")
                 # Tool call complete
-                if "</tool_call>" in full_response and not tool_found:
-                    tag_found = False
-                    tool_call, error_message, raw_tool_xml = self._parse_tool_call(
-                        full_response
-                    )
+                if not tool_found:
+                    for t in self.tools:
+                        # print(f"Checking for </{t.name}>")
+                        # print(f"Full response at this point: {full_response}")
+                        if f"</{t.name}>" in full_response:
+                            print(f"Found </{t.name}> in full_response")
+                            tag_found = False
+                            tool_name, params, error_message, raw_tool_xml = (
+                                self._parse_tool_call(full_response)
+                            )
+                            break
                     if error_message:
                         error_payload = error_message
                         if raw_tool_xml:
@@ -305,30 +323,30 @@ class Agent:
                             type="tool_error",
                             content=f"<tool_error>\n{error_payload}\n</tool_error>\n",
                         )
-                        halted = False
-                        tokens_since_halted = 0
-                        halted_tokens = ""
-                        continue
-                    yield ResponseEvent(type="tool_call", content=raw_tool_xml)
-                    return
+                        return
+                    if raw_tool_xml:
+                        tool_found = True
+                        yield ResponseEvent(
+                            type="tool_call", content=raw_tool_xml or ""
+                        )
+                        return
 
                 # Removed thinking block handling - will be handled as a normal tool call
 
         # --- After the stream loop finishes ---
         print(f"Stream finished. Final accumulated content: {full_response}")
 
-        # Check if the stream ended while inside an unclosed tool_call tag
-        if tag_found:
-            print("Stream ended with an unclosed <tool_call> tag.")
+        if tag_found and not tool_found:
+            print("Stream ended with an unclosed tool call.")
             yield ResponseEvent(
                 type="tool_error",
-                content=f"<tool_error>\nStream ended unexpectedly within a tool_call block. </tool_call> closing tag not found. Incomplete XML:\n{halted_tokens}\n</tool_error>\n",
+                content=f"<tool_error>\nStream ended unexpectedly within a tool call. Closing tag not found. Incomplete XML:\n{halted_tokens}\n</tool_error>\n",
             )
         elif halted and not tool_found and not tag_found:
             # If we halted (saw '<') but never found a complete tag or ended inside one, yield the buffered content as response
-            print(
-                f"Stream ended after halting, flushing remaining buffer: {halted_tokens}"
-            )
+            print("----- Stream ended after halting, flushing remaining buffer -----")
+            print(halted_tokens)
+            print("-------------------------------------------------------")
             yield ResponseEvent(type="response", content=halted_tokens)
 
         # Agent no longer appends assistant responses to its own history

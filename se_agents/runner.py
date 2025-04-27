@@ -30,9 +30,10 @@ class Runner:
                     tool_event = True
                     yield event
 
-                    tool_call_dict, error_msg, raw_xml = self.agent._parse_tool_call(
+                    tool_name, params, error_msg, raw_xml = self.agent._parse_tool_call(
                         event.content
                     )
+                    tool_call_dict = {tool_name: params} if tool_name else None
 
                     if error_msg or not tool_call_dict:
                         error_content = f"<tool_error>\nRunner failed to parse agent's yielded tool_call XML: {error_msg or 'Parse failure'}\nRaw XML:\n{raw_xml}\n</tool_error>\n"

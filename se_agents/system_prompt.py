@@ -41,12 +41,10 @@ def build_tools_section(tools):
             required = "(required)" if param.get("required", False) else ""
             tools_section += f"- {name}: {param.get('description', '')} {required}\n"
         tools_section += "Usage:\n"
-        tools_section += "<tool_call>\n"
         tools_section += f"<{tool.name}>\n"
         for name in tool.parameters:
             tools_section += f"<{name}>{name} here</{name}>\n"
-        tools_section += f"</{tool.name}>\n"
-        tools_section += "</tool_call>\n\n"
+        tools_section += f"</{tool.name}>\n\n"
     return tools_section
 
 
