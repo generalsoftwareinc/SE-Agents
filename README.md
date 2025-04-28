@@ -1,4 +1,4 @@
-# se-agents: Autonomous LLM Agent Framework
+# SE Agents: Autonomous LLM Agent Framework
 
 `se-agents` provides a lightweight Python framework for building autonomous agents powered by large language models (LLMs). It simplifies integrating external tools, managing conversation history, and handling asynchronous operations, allowing developers to focus on agent capabilities.
 
@@ -249,7 +249,8 @@ Based on initial TODOs:
 - [x] Implement final-output tool to allow the agent to close the loop. Include 'enforce final-output tool' option in the `Runner` constructor, which will prompt the model to conclude the task using the final-output tool. This will change current behavior of the 'response' event. Instead of all non-tool responses being yielded as events, only the final response will be yielded. If no final-output tool is found, the Runner will re run the Agent, prompting the model to conclude the task using the final-output tool.
 - [x] Refactor block \<thinking> and event handling as a tool (`ThinkTool`), following the pattern described by the [Anthropic documentation](https://www.anthropic.com/engineering/claude-think-tool).
 - [x] Remove the <tool_call> block parsing from the Agent, instead parse the tool call xml using the <tool_name> as top level tag. This required changes to the `Agent` and its prompts.
-- [ ] Yield chunks of the <tool_call> block as they are streamed, instead of yielding the whole block at once when it detects the end of the block. This would be useful for streaming thinking and final-output instead of waiting for the whole block to be parsed, improving the user experience. `Agent` class should yield all chunks of the <tool_call> block as they are streamed, but the `Runner` should only yield to clients the chunks corresponding to `ThinkTool` and `FinalOutput` calls, all other calls should be yielded as a whole after the whole block is parsed.
+- [x] Yield chunks of the <tool_call> block as they are streamed, instead of yielding the whole block at once when it detects the end of the block. This would be useful for streaming thinking and final-output instead of waiting for the whole block to be parsed, improving the user experience. `Agent` class should yield all chunks of the <tool_call> block as they are streamed, but the `Runner` should only yield to clients the chunks corresponding to `ThinkTool` and `FinalOutput` calls, all other calls should be yielded as a whole after the whole block is parsed.
+- [ ] Create a way to differentiate between the streaming response of tools and the llm output. This would allow the `Runner` to yield these tool responses even when enforce_final is enabled, while silencing the llm response.
 
 
 ## License
