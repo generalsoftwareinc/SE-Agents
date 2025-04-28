@@ -1,4 +1,4 @@
-from typing import AsyncGenerator, Dict, Optional
+from typing import AsyncGenerator, Dict, List, Optional
 
 from se_agents.agent import Agent
 from se_agents.schemas import ResponseEvent
@@ -9,7 +9,9 @@ class Runner:
         self.agent = agent
         self.enforce_final = enforce_final
 
-    async def run(self, user_input: str) -> AsyncGenerator[ResponseEvent, None]:
+    async def run(
+        self, user_input: str, image_urls: Optional[List[str]] = None
+    ) -> AsyncGenerator[ResponseEvent, None]:
         """
         Execute a query through the Agent, handle tool calls, and yield events.
         If enforce_final is True, it buffers 'response' events and only yields
@@ -24,7 +26,7 @@ class Runner:
             buffered_response = ""
             final_output_result_content = None
 
-            async for event in self.agent.run_stream(next_input):
+            async for event in self.agent.run_stream(next_input, image_urls):
 
                 if event.type == "tool_call":
                     tool_event = True

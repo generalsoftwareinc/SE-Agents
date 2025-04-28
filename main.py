@@ -75,7 +75,7 @@ async def main():
             # FireCrawlFetchPage(firecrawl_key),
             FinalOutput(),
             ThinkTool(),
-            OpenAIVisionTool(),
+            # OpenAIVisionTool(),
         ],  # Added FinalOutput() instance
         # initial_messages=[
         #     {
@@ -127,8 +127,9 @@ async def main():
 
         print(f"\nAssistant: ", end="")  # Modified prompt
         # print(f"\nAssistant ({test_agent.name}): ", end="")  # Modified prompt
+        image_urls= ["https://www.mymove.com/wp-content/uploads/2020/05/GettyImages-923244752-scaled.jpg"]
 
-        async for response in runner.run(user_input):
+        async for response in runner.run(user_input, image_urls):
             # Create the generator using the test_agent
             # async for response in test_agent.run_stream(user_input):
             if response.type == "response":
