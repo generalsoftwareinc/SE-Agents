@@ -9,10 +9,22 @@ from requests import HTTPError
 
 
 class Tool:
-    def __init__(self, name: str, description: str, parameters: dict):
+    def __init__(
+        self,
+        name: str,
+        description: str,
+        parameters: dict,
+        stream: bool = False,
+        param_stream: str = None,
+    ):
         self.name = name
         self.description = description
         self.parameters = parameters
+        self.stream = stream
+
+        if stream and not param_stream:
+            raise ValueError("Streaming tools must have a param_stream specified")
+        self.param_stream = param_stream
 
     def _process_parameters(self, **kwargs: dict) -> dict:
         # Enforce required parameters
@@ -425,15 +437,13 @@ class ThinkTool(Tool):
                     "required": True,
                 }
             },
+            stream=True,
+            param_stream="thought",
         )
 
     def execute(self, **kwargs) -> str:
-        # This tool doesn't *do* anything other than signal thinking.
-        # The Runner intercepts this call.
-        # We return a simple confirmation.
         params = self._process_parameters(**kwargs)
         thought = params.get("thought", "")
-        # Optional: Could return the thought itself, but a simple confirmation is cleaner.
         return f"Thought logged: {thought}"
 
 
@@ -449,6 +459,8 @@ class FinalOutput(Tool):
                     "required": True,
                 }
             },
+            stream=True,
+            param_stream="result",
         )
 
     def execute(self, **kwargs) -> str:

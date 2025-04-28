@@ -1,8 +1,10 @@
 import inspect
 import re
 import xml.etree.ElementTree as ET
+from calendar import c
 from typing import AsyncGenerator, Dict, List, Optional, Union
 
+from httpx import stream
 from openai import Client
 
 from se_agents.schemas import ResponseEvent
@@ -270,6 +272,11 @@ class Agent:
         tool_found = False
         tokens_since_halted = 0
         halted_tokens = ""
+
+        ## New experimental feature: streaming tool responses
+        tool_streaming = False
+        stream_param = None
+
         async for content in self._token_stream(response):
             full_response += content
             if "<" in content:
@@ -297,19 +304,28 @@ class Agent:
                 for t in self.tools:
                     if f"<{t.name}>" in full_response:
                         tag_found = True
+                        if t.stream:
+                            tool_streaming = True
+                            stream_param = t.param_stream
                         break
 
             # Handle complete tags
             if tag_found:
+                check_set = {"<", ">", "/"}
+                if tool_streaming:
+                    if f"<{stream_param}>" in full_response and not check_set & {
+                        content.strip()
+                    }:
+                        yield ResponseEvent(type="response", content=content)
+                    if "</" in full_response:
+                        tool_streaming = False
                 # print("----- Tag found -----")
                 # print("Starting to parse tool call")
-                # Tool call complete
                 if not tool_found:
                     for t in self.tools:
                         # print(f"Checking for </{t.name}>")
                         # print(f"Full response at this point: {full_response}")
                         if f"</{t.name}>" in full_response:
-                            print(f"Found </{t.name}> in full_response")
                             tag_found = False
                             tool_name, params, error_message, raw_tool_xml = (
                                 self._parse_tool_call(full_response)

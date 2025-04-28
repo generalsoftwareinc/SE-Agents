@@ -113,7 +113,7 @@ async def main():
     # )
 
     # Reusing the original loop structure for the test agent
-    runner = Runner(agent, enforce_final=True)  # Enable final output enforcement
+    runner = Runner(agent, enforce_final=False)  # Enable final output enforcement
     print("🤖 Starting agent loop (with final output enforcement)...")
     print("Type 'exit' to end the conversation\n")
 

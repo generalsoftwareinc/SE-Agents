@@ -91,5 +91,5 @@ class Runner:
                     next_input = f"<feedback>\n{reprompt_message}\n</feedback>\n"
                     continue
             else:
-                if not tool_event:
+                if final_output or not tool_event:
                     break
