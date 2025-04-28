@@ -14,6 +14,7 @@ from se_agents.tools import (  # Added FinalOutput import
     FinalOutput,
     FireCrawlFetchPage,
     MockNumberTool,
+    OpenAIVisionTool,
     ThinkTool,
 )
 
@@ -70,10 +71,11 @@ async def main():
         model=model,
         tools=[
             ExaSearch(exa_key),
-            # ExaCrawl(exa_key),
-            FireCrawlFetchPage(firecrawl_key),
+            ExaCrawl(exa_key),
+            # FireCrawlFetchPage(firecrawl_key),
             FinalOutput(),
             ThinkTool(),
+            OpenAIVisionTool(),
         ],  # Added FinalOutput() instance
         # initial_messages=[
         #     {
