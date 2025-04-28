@@ -507,11 +507,14 @@ class OpenAIVisionTool(VisionBaseTool):
         image_param = params.get("image")
 
         if url:  # the image is passed as a link
+            # return {"role": "user", "content": f"{prompt} {url}"}
+
             return {
                 "role": "user",
-                "content": prompt
-                + " "
-                + "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": url}},
+                ],
             }
 
         # if any(
@@ -524,21 +527,21 @@ class OpenAIVisionTool(VisionBaseTool):
         # else:
         #     raise ValueError("The image format ")
 
-    def execute(self, client: Client, **kwargs):
+    async def execute(self, client: Client, model: str, **kwargs):
 
         image_msg = self._process_parameters(**kwargs)
 
         # print(f"===Sending image {image_msg} to OpenAI ===")
-        # print(f"===Sending image {image_msg} to {model} ===")
+        print(f"===Sending image {image_msg} to {model} ===")
 
-        response = client.chat.completions.create(
-            model="gpt-4.1-mini",
-            # model=model,
+        response = await client.chat.completions.create(
+            # model="gpt-4.1-mini",
+            model=model,
             messages=[image_msg],
             stream=False,
         )
 
-        # print(f"===OpenAI returned a response with type {type(response)}")
+        print(f"===OpenAI returned a response with type {type(response)}")
 
         return response.choices[0].message.content
 

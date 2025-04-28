@@ -206,11 +206,13 @@ class Agent:
 
         try:
             if inspect.iscoroutinefunction(tool.execute):
-                result = await tool.execute(**params)
-            else:
                 if isinstance(tool, OpenAIVisionTool):
-                    result = tool.execute(client=self.client, **params)
+                    result = await tool.execute(
+                        client=self.client, model=self.model, **params
+                    )
                 else:
+                    result = await tool.execute(**params)
+            else:
                     result = tool.execute(**params)
 
             if not isinstance(result, str):
