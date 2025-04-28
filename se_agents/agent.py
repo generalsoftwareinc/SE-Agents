@@ -9,7 +9,7 @@ from openai import AsyncOpenAI
 
 from se_agents.schemas import ResponseEvent
 from se_agents.system_prompt import build_system_prompt
-from se_agents.tools import OpenAIVisionTool, Tool
+from se_agents.tools import OpenAIVisionTool, Tool, VisionBaseTool
 
 TOKEN_LIMIT = 80000
 
@@ -213,7 +213,7 @@ class Agent:
                 else:
                     result = await tool.execute(**params)
             else:
-                    result = tool.execute(**params)
+                result = tool.execute(**params)
 
             if not isinstance(result, str):
                 result = str(result)
@@ -225,7 +225,24 @@ class Agent:
     @property
     def total_token_count(self) -> int:
         """Calculate the total number of words in the content of all messages."""
-        return sum(len(message["content"].split()) for message in self.messages)
+        only_text_token_count = sum(
+            len(message["content"].split())
+            for message in self.messages
+            if isinstance(message["content"], str)
+        )
+
+        messages_with_attachment = [
+            msg for msg in self.messages if isinstance(msg["content"], list)
+        ]
+        messages_with_attachment_token_count = 0
+        for msg in messages_with_attachment:
+
+            for content in msg["content"]:
+
+                if content["type"] == "text":
+                    messages_with_attachment_token_count += len(content["text"].split())
+                elif content["type"] == "image_url":
+                    messages_with_attachment_token_count += len(content["image_url"]["url"].split())
 
     def _truncate_context_window(self):
         # Only pop messages (except system and last) until under token limit.
@@ -252,16 +269,36 @@ class Agent:
             for token in self._split_tokens(text):
                 yield token
 
-    async def run_stream(self, user_input: str) -> AsyncGenerator[ResponseEvent, None]:
+    async def run_stream(
+        self, user_input: str, image_urls: Optional[List[str]] = None
+    ) -> AsyncGenerator[ResponseEvent, None]:
         """Process a user message and yield responses (assistant messages and tool results).
 
         This method handles the conversation loop, including tool calls and user interactions.
         For the ask_followup_question tool, it yields a special response type that signals
         the main loop to get user input and then continue the conversation with that input.
         """
-        self.messages.append(
-            {"role": "user", "content": user_input}
-        )  # first message input is not handled by Runner
+
+        if image_urls and not any(
+            [isinstance(tool, VisionBaseTool) for tool in self.tools]
+        ):
+            print("=== Appending image to messages ===")
+            image_dicts = [
+                {"type": "image_url", "image_url": {"url": url}} for url in image_urls
+            ]
+            self.messages.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_input},
+                        *image_dicts,
+                    ],
+                }
+            )
+        else:
+            self.messages.append({"role": "user", "content": user_input})
+
+        # first message input is not handled by Runner
         self._truncate_context_window()
         response = await self.client.chat.completions.create(
             model=self.model, messages=self.messages, stream=True
