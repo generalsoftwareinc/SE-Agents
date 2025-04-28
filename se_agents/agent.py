@@ -5,7 +5,7 @@ from calendar import c
 from typing import AsyncGenerator, Dict, List, Optional, Union
 
 from httpx import stream
-from openai import Client
+from openai import AsyncOpenAI
 
 from se_agents.schemas import ResponseEvent
 from se_agents.system_prompt import build_system_prompt
@@ -54,7 +54,7 @@ class Agent:
         self.api_key = api_key
         self.model = model
         self.base_url = base_url
-        self.client = Client(api_key=api_key, base_url=base_url)
+        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
         # Tool config
         self.tools = tools or []
@@ -240,7 +240,7 @@ class Agent:
 
     async def _token_stream(self, response) -> AsyncGenerator[str, None]:
         """Flatten the LLM streaming response into a stream of tokens."""
-        for chunk in response:
+        async for chunk in response:
             text = chunk.choices[0].delta.content
             if not text:
                 continue
@@ -258,7 +258,7 @@ class Agent:
             {"role": "user", "content": user_input}
         )  # first message input is not handled by Runner
         self._truncate_context_window()
-        response = self.client.chat.completions.create(
+        response = await self.client.chat.completions.create(
             model=self.model, messages=self.messages, stream=True
         )
 
