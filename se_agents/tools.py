@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from duckduckgo_search import DDGS
 from exa_py import Exa
 from firecrawl import FirecrawlApp
+from openai import Client
 from requests import HTTPError
 
 
@@ -458,34 +459,89 @@ class VisionBaseTool(Tool):
             name=name,
             description="Use the tool to interpret images uploaded by the user and perform classification and object detection tasks",
             parameters={
-                "image": {
+                "url": {
                     "type": "string",
-                    "description": "An valid image formatted file or a url that gets an image",
+                    "description": "A valid url that leads to an image",
+                    "required": False,
+                },
+                "image": {
+                    "type": "Image",
+                    "description": "A valid image file",
+                    "required": False,
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "What the user expects the model to detect/classify in the image",
                     "required": True,
-                }
+                },
             },
         )
 
-    @abstractmethod
     @property
+    @abstractmethod
     def ACCEPTED_FORMATS(self) -> List[str]:
         return self._accepted_formats
 
     def _process_parameters(self, **kwargs):
 
-        image_param: str = kwargs.get("image")
+        params = super()._process_parameters(**kwargs)
+        url: str = params.get("url")
+        image_param = params.get("image")
 
-        if not image_param:
-            raise KeyError(f"The {self.name} tool requires the 'image' parameter.")
+        if not url and not image_param:
+            raise KeyError(
+                f"The '{self.name}' tool requires the 'url' or 'image' parameters."
+            )
 
-        if any(
-            [image_param.strip().endswith(fmt) for fmt in self._accepted_formats]
-        ):  # the image is passed as a file
-            return {"type": "base64", "data": "data:image/jpeg;base64,{base64_image}"}
-        elif image_param.strip().startswith("http"):  # the image is passed as a link
-            return {"type": "url", "data": image_param}
-        else:
-            raise ValueError("The image format ")
+        return params
+
+
+class OpenAIVisionTool(VisionBaseTool):
+    def __init__(self):
+        super().__init__("openai_vision")
+
+    def _process_parameters(self, **kwargs):
+        params = super()._process_parameters(**kwargs)
+        url = params.get("url")
+        prompt = params.get("prompt")
+        image_param = params.get("image")
+
+        if url:  # the image is passed as a link
+            return {
+                "role": "user",
+                "content": prompt
+                + " "
+                + "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
+            }
+
+        # if any(
+        #     [image_param.strip().endswith(fmt) for fmt in self._accepted_formats]
+        # ):  # the image is passed as a file
+        #     return (
+        #         prompt,
+        #         {"type": "base64", "data": "data:image/jpeg;base64,{base64_image}"},
+        #     )
+        # else:
+        #     raise ValueError("The image format ")
+
+    def execute(self, client: Client, **kwargs):
+
+        image_msg = self._process_parameters(**kwargs)
+
+        # print(f"===Sending image {image_msg} to OpenAI ===")
+        # print(f"===Sending image {image_msg} to {model} ===")
+
+        response = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            # model=model,
+            messages=[image_msg],
+            stream=False,
+        )
+
+        # print(f"===OpenAI returned a response with type {type(response)}")
+
+        return response.choices[0].message.content
+
 
 class FinalOutput(Tool):
     def __init__(self):

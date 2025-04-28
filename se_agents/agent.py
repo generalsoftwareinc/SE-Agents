@@ -9,7 +9,7 @@ from openai import AsyncOpenAI
 
 from se_agents.schemas import ResponseEvent
 from se_agents.system_prompt import build_system_prompt
-from se_agents.tools import Tool
+from se_agents.tools import OpenAIVisionTool, Tool
 
 TOKEN_LIMIT = 80000
 
@@ -208,7 +208,10 @@ class Agent:
             if inspect.iscoroutinefunction(tool.execute):
                 result = await tool.execute(**params)
             else:
-                result = tool.execute(**params)
+                if isinstance(tool, OpenAIVisionTool):
+                    result = tool.execute(client=self.client, **params)
+                else:
+                    result = tool.execute(**params)
 
             if not isinstance(result, str):
                 result = str(result)
