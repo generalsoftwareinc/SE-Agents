@@ -244,6 +244,8 @@ class Agent:
                 elif content["type"] == "image_url":
                     messages_with_attachment_token_count += len(content["image_url"]["url"].split())
 
+        return only_text_token_count + messages_with_attachment_token_count
+
     def _truncate_context_window(self):
         # Only pop messages (except system and last) until under token limit.
         while self.total_token_count > self.token_limit and len(self.messages) > 2:
