@@ -314,13 +314,7 @@ class ExaCrawl(Tool):
             return "Error: Failed to fetch page content after handling exceptions."
 
 
-class ExaSearchHighlights(ExaSearchBase):
-    def __init__(self, api_key:str):
-        super().__init__(api_key)
-
-        self.name = 'search_highlights'
-        self.description = 'This tool is used to get the main highlights of the Exa search'
-    
+class ExaSearchHighlights(ExaSearchBase):    
     def execute(self, **kwargs) -> str:
         params = self._process_parameters(**kwargs)
         query = params.get("query")
