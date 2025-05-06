@@ -314,6 +314,60 @@ class ExaCrawl(Tool):
             return "Error: Failed to fetch page content after handling exceptions."
 
 
+class ExaSearchHighlights(ExaSearchBase):    
+    def execute(self, **kwargs) -> str:
+        params = self._process_parameters(**kwargs)
+        query = params.get("query")
+        include_domains = params.get("include_domains")
+        exclude_domains = params.get("exclude_domains")
+        start_published_date = params.get("start_published_date")
+        end_published_date = params.get("end_published_date")
+
+        results = []
+        separator = "\n==============================================================================\n"
+
+        while True:
+            try:
+                search_results = self.client.search_and_contents(
+                    query=query,
+                    num_results=10,
+                    include_domains=include_domains,
+                    exclude_domains=exclude_domains,
+                    start_published_date=start_published_date,
+                    end_published_date=end_published_date,
+                    highlights=True
+                ).results
+                break
+            except ValueError as e:
+                msg = ""
+                if e.args:
+                    msg = str(e.args[0])
+                status_code = getattr(e, "response", None) and getattr(
+                    e.response, "status_code", None
+                )
+                if status_code == 429 or "429" in msg:
+                    print("Rate limit exceeded (429). Retrying after 1 second...")
+                    time.sleep(1)
+                    continue
+                else:
+                    text = getattr(e, "response", None) and getattr(
+                        e.response, "text", str(e)
+                    )
+                    return f"Error during search: {status_code or 'N/A'} - {text}"
+            except Exception as e:
+                return f"An unexpected error occurred during search: {e}"
+
+        if search_results:
+            try:
+                for r in search_results:
+                    highlights = "\n  ".join(r.highlights) if r.highlights else "No highlights available"
+                    results.append(f"- {r.title}\n  URL: {r.url}\n  Highlights:\n  {highlights}")
+                return f"Search highlights:{separator}" + separator.join(results)
+            except Exception as e:
+                return f"Error processing search results: {e}"
+        else:
+            return "No results found for the search query."
+
 class ExaSearchContent(ExaSearchBase):
 
     def execute(self, **kwargs) -> str:
