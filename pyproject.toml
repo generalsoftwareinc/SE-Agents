@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "asyncer>=0.0.8",
     "duckduckgo-search>=7.5.2",
     "exa-py>=1.12.1",
     "firecrawl-py>=1.14.1",

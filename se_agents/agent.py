@@ -1,5 +1,6 @@
 import inspect
 import re
+import asyncer
 import xml.etree.ElementTree as ET
 from calendar import c
 from typing import AsyncGenerator, Dict, List, Optional, Union
@@ -213,7 +214,7 @@ class Agent:
                 else:
                     result = await tool.execute(**params)
             else:
-                result = tool.execute(**params)
+                result = await asyncer.asyncify(tool.execute)(**params)
 
             if not isinstance(result, str):
                 result = str(result)
