@@ -277,12 +277,14 @@ class ExaCrawl(Tool):
             return "Error: No URL provided"
 
         content = None
+        retries = 0
         while True:
             try:
+                livecrawl = 'always' if retries == 0 else 'never'
                 response = self.client.get_contents(
                     urls=[url],
                     text={"max_characters": 64000, "include_html_tags": False},
-                    livecrawl="always",
+                    livecrawl=livecrawl,
                 )
                 if response.results:
                     content = response.results[0].text
@@ -304,6 +306,11 @@ class ExaCrawl(Tool):
                     text = getattr(e, "response", None) and getattr(
                         e.response, "text", str(e)
                     )
+                    if retries == 0 and not status_code:
+                        retries += 1
+                        print("==== Response returned N/A, retrying without livecrawl...")
+                        continue
+
                     return f"Error fetching page: {status_code or 'N/A'} - {text}"  # Return error for non-429
             except Exception as e:
                 return f"Error fetching page: {e}"  # Return error for other exceptions
