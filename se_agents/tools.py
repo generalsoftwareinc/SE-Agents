@@ -1,6 +1,8 @@
 from abc import abstractmethod
 import time
 from typing import List
+import base64
+from pathlib import Path
 
 from dotenv import load_dotenv
 from duckduckgo_search import DDGS
@@ -280,7 +282,7 @@ class ExaCrawl(Tool):
         retries = 0
         while True:
             try:
-                livecrawl = 'always' if retries == 0 else 'never'
+                livecrawl = "always" if retries == 0 else "never"
                 response = self.client.get_contents(
                     urls=[url],
                     text={"max_characters": 64000, "include_html_tags": False},
@@ -308,7 +310,9 @@ class ExaCrawl(Tool):
                     )
                     if retries == 0 and not status_code:
                         retries += 1
-                        print("==== Response returned N/A, retrying without livecrawl...")
+                        print(
+                            "==== Response returned N/A, retrying without livecrawl..."
+                        )
                         continue
 
                     return f"Error fetching page: {status_code or 'N/A'} - {text}"  # Return error for non-429
@@ -321,7 +325,7 @@ class ExaCrawl(Tool):
             return "Error: Failed to fetch page content after handling exceptions."
 
 
-class ExaSearchHighlights(ExaSearchBase):    
+class ExaSearchHighlights(ExaSearchBase):
     def execute(self, **kwargs) -> str:
         params = self._process_parameters(**kwargs)
         query = params.get("query")
@@ -342,7 +346,7 @@ class ExaSearchHighlights(ExaSearchBase):
                     exclude_domains=exclude_domains,
                     start_published_date=start_published_date,
                     end_published_date=end_published_date,
-                    highlights=True
+                    highlights=True,
                 ).results
                 break
             except ValueError as e:
@@ -367,13 +371,20 @@ class ExaSearchHighlights(ExaSearchBase):
         if search_results:
             try:
                 for r in search_results:
-                    highlights = "\n  ".join(r.highlights) if r.highlights else "No highlights available"
-                    results.append(f"- {r.title}\n  URL: {r.url}\n  Highlights:\n  {highlights}")
+                    highlights = (
+                        "\n  ".join(r.highlights)
+                        if r.highlights
+                        else "No highlights available"
+                    )
+                    results.append(
+                        f"- {r.title}\n  URL: {r.url}\n  Highlights:\n  {highlights}"
+                    )
                 return f"Search highlights:{separator}" + separator.join(results)
             except Exception as e:
                 return f"Error processing search results: {e}"
         else:
             return "No results found for the search query."
+
 
 class ExaSearchContent(ExaSearchBase):
 
@@ -560,6 +571,11 @@ class VisionBaseTool(Tool):
 class OpenAIVisionTool(VisionBaseTool):
     def __init__(self):
         super().__init__("openai_vision")
+        self._accepted_formats = [".png", ".jpg", ".jpeg", ".webp", ".gif"]
+
+    def encode_image(self, image_path):
+        with open(image_path, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode("utf-8")
 
     def _process_parameters(self, **kwargs):
         params = super()._process_parameters(**kwargs)
@@ -567,9 +583,7 @@ class OpenAIVisionTool(VisionBaseTool):
         prompt = params.get("prompt")
         image_param = params.get("image")
 
-        if url:  # the image is passed as a link
-            # return {"role": "user", "content": f"{prompt} {url}"}
-
+        if url:
             return {
                 "role": "user",
                 "content": [
@@ -577,23 +591,28 @@ class OpenAIVisionTool(VisionBaseTool):
                     {"type": "image_url", "image_url": {"url": url}},
                 ],
             }
+        image_path = Path(image_param)
+        if image_path.exists() and image_path.suffix in self._accepted_formats:
+            base64_image = self.encode_image(image_path)
+            return {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt,
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                    },
+                ],
+            }
 
-        # if any(
-        #     [image_param.strip().endswith(fmt) for fmt in self._accepted_formats]
-        # ):  # the image is passed as a file
-        #     return (
-        #         prompt,
-        #         {"type": "base64", "data": "data:image/jpeg;base64,{base64_image}"},
-        #     )
-        # else:
-        #     raise ValueError("The image format ")
+        raise ValueError("The image format is not supported")
 
     async def execute(self, client: Client, model: str, **kwargs):
 
         image_msg = self._process_parameters(**kwargs)
-
-        # print(f"===Sending image {image_msg} to OpenAI ===")
-        print(f"===Sending image {image_msg} to {model} ===")
 
         response = await client.chat.completions.create(
             # model="gpt-4.1-mini",
