@@ -1,8 +1,6 @@
 import asyncio
 import datetime
 import os
-import re
-from email.mime import base
 
 from dotenv import load_dotenv
 
@@ -13,9 +11,9 @@ from se_agents.tools import (  # Added FinalOutput import
     ExaSearch,
     ExaSearchHighlights,
     FinalOutput,
-    FireCrawlFetchPage,
-    MockNumberTool,
-    OpenAIVisionTool,
+    # FireCrawlFetchPage,
+    # MockNumberTool,
+    # OpenAIVisionTool,
     ThinkTool,
 )
 
@@ -44,7 +42,7 @@ rules = """
 
 
 async def main():
-    GRAY = "\033[90m"
+    # GRAY = "\033[90m"
     GREEN = "\033[92m"
     BLUE = "\033[94m"
     RED = "\033[91m"
@@ -55,11 +53,20 @@ async def main():
     # base_url = None
     model = os.getenv("OPENROUTER_MODEL")
     base_url = os.getenv("OPENROUTER_BASE_URL")
-    firecrawl_key = os.getenv("FIRECRAWL_API_KEY")
+    # firecrawl_key = os.getenv("FIRECRAWL_API_KEY")
     exa_key = os.getenv("EXA_API_KEY")
 
     if not api_key:
         print("Error: OPENROUTER_API_KEY environment variable not set")
+        return
+    if not model:
+        print("Error: OPENROUTER_MODEL environment variable not set")
+        return
+    if not base_url:
+        print("Error: OPENROUTER_BASE_URL environment variable not set")
+        return
+    if not exa_key:
+        print("Error: EXA_API_KEY environment variable not set")
         return
 
     # Instantiate the mock tool
@@ -94,40 +101,18 @@ async def main():
         add_final_output_instructions=True,
     )
 
-    # agent.messages.append(
-    #     {
-    #         "role": "user",
-    #         "content": """You are a helpful assistant that can perform web searches and fetch pages using Firecrawl.
-    #         """,
-    #     },
-    # )
-    # # print(agent.messages[0]["content"])
-
-    # Initialize the test agent
-    # test_agent = Agent(
-    #     name="Test MockTools Agent",
-    #     api_key=api_key,
-    #     base_url=base_url,
-    #     model=model,
-    #     tools=[mock_tool],  # Equip only with the mock tool
-    #     verbose=True,
-    #     additional_context=f"Test Agent - Current time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-    #     rules="You are a test agent equipped with MockIntTool. Your goal is to test its functionality.",
-    #     add_default_rules=False,
-    # )
-
     # Reusing the original loop structure for the test agent
-    runner = Runner(agent, enforce_final=False)  # Enable final output enforcement
+    runner = Runner(agent, enforce_final=True)  # Enable final output enforcement
     print("🤖 Starting agent loop (with final output enforcement)...")
     print("Type 'exit' to end the conversation\n")
 
     while True:
-        user_input = input(f"\nUser: ")
+        user_input = input("\nUser: ")
         # user_input = input(f"\nUser ({test_agent.name}): ")  # Modified prompt
         if user_input.lower() == "exit":
             break
 
-        print(f"\nAssistant: ", end="")  # Modified prompt
+        print("\nAssistant: ", end="")  # Modified prompt
         # print(f"\nAssistant ({test_agent.name}): ", end="")  # Modified prompt
         image_urls = []
         # image_urls = [

@@ -243,7 +243,9 @@ class Agent:
                 if content["type"] == "text":
                     messages_with_attachment_token_count += len(content["text"].split())
                 elif content["type"] == "image_url":
-                    messages_with_attachment_token_count += len(content["image_url"]["url"].split())
+                    messages_with_attachment_token_count += len(
+                        content["image_url"]["url"].split()
+                    )
 
         return only_text_token_count + messages_with_attachment_token_count
 
