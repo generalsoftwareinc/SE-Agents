@@ -224,7 +224,7 @@ The framework includes several pre-built tools:
     ```
 3.  **Activate the virtual environment:**
     ```bash
-    source .venv/bin/activate 
+    source .venv/bin/activate
     # Or on Windows: .venv\Scripts\activate
     ```
 4.  **Sync dependencies:**
@@ -250,6 +250,7 @@ Based on initial TODOs:
 - [x] Refactor block \<thinking> and event handling as a tool (`ThinkTool`), following the pattern described by the [Anthropic documentation](https://www.anthropic.com/engineering/claude-think-tool).
 - [x] Remove the <tool_call> block parsing from the Agent, instead parse the tool call xml using the <tool_name> as top level tag. This required changes to the `Agent` and its prompts.
 - [x] Yield chunks of the <tool_call> block as they are streamed, instead of yielding the whole block at once when it detects the end of the block. This would be useful for streaming thinking and final-output instead of waiting for the whole block to be parsed, improving the user experience. `Agent` class should yield all chunks of the <tool_call> block as they are streamed, but the `Runner` should only yield to clients the chunks corresponding to `ThinkTool` and `FinalOutput` calls, all other calls should be yielded as a whole after the whole block is parsed.
+- [ ] Migrate tool call ResponseEvent to a JSON based schema, instead of returning the content of the tool_call as a str containing XML, return a valid python dict with the function parameters. This can be achieved by creating a child class ToolCallResponseEvent that extends ResponseEvent.
 - [ ] Create a way to differentiate between the streaming response of tools and the llm output. This would allow the `Runner` to yield these tool responses even when enforce_final is enabled, while silencing the llm response.
 
 

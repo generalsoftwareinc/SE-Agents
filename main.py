@@ -6,6 +6,13 @@ from dotenv import load_dotenv
 
 from se_agents.agent import Agent
 from se_agents.runner import Runner
+from se_agents.schemas import (
+    ResponseEvent,
+    TextResponseEvent,
+    ToolCallResponseEvent, 
+    ToolResponseEvent, 
+    ToolErrorEvent
+)
 from se_agents.tools import (  # Added FinalOutput import
     ExaCrawl,
     ExaSearch,
@@ -122,18 +129,40 @@ async def main():
         async for response in runner.run(user_input, image_urls):
             # Create the generator using the test_agent
             # async for response in test_agent.run_stream(user_input):
-            if response.type == "response":
+            # Handle specialized event classes first
+            if isinstance(response, TextResponseEvent):
                 print(
                     response.content,
                     end="",
                     flush=True,
                 )
-            elif response.type == "tool_call":
-                print(f"\n\n{GREEN}🟡 {response.content}{RESET}\n")
-            elif response.type == "tool_response":
-                print(f"\n\n{BLUE}🟢 Tool response:\n{response.content}{RESET}\n")
-            elif response.type == "tool_error":
-                print(f"\n\n{RED}🔴 Tool error:\n{response.content}{RESET}\n")
+            elif isinstance(response, ToolCallResponseEvent):
+                print(f"\n\n{GREEN}🟡 Tool call: {response.tool_name or 'unknown'}{RESET}")
+                if response.parameters:
+                    print(f"{GREEN}Parameters: {response.parameters}{RESET}\n")
+            elif isinstance(response, ToolResponseEvent):
+                print(f"\n\n{BLUE}🟢 Tool response for {response.tool_name or 'unknown tool'}:\n{response.result}{RESET}\n")
+            elif isinstance(response, ToolErrorEvent):
+                print(f"\n\n{RED}🔴 Tool error: {response.error_message}{RESET}")
+                if response.tool_name:
+                    print(f"{RED}Tool: {response.tool_name}{RESET}")
+                if response.raw_xml:
+                    print(f"{RED}Raw XML: {response.raw_xml}{RESET}\n")
+                print() # Extra newline for readability
+            # Fallback for backward compatibility
+            elif hasattr(response, "type"):
+                if response.type == "response":
+                    print(response.content, end="", flush=True)
+                elif response.type == "tool_call":
+                    print(f"\n\n{GREEN}🟡 {response.content}{RESET}\n")
+                elif response.type == "tool_response":
+                    print(f"\n\n{BLUE}🟢 Tool response:\n{response.content}{RESET}\n")
+                elif response.type == "tool_error":
+                    print(f"\n\n{RED}🔴 Tool error:\n{response.content}{RESET}\n")
+                else:
+                    print(f"\n\nUnknown event type: {response.type}\nContent: {response.content}\n")
+            else:
+                print(f"\n\nUnknown response format: {response}\n")
 
 
 if __name__ == "__main__":

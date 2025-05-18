@@ -2,13 +2,11 @@ import inspect
 import re
 import asyncer
 import xml.etree.ElementTree as ET
-from calendar import c
 from typing import AsyncGenerator, Dict, List, Optional, Union
 
-from httpx import stream
 from openai import AsyncOpenAI
 
-from se_agents.schemas import ResponseEvent
+from se_agents.schemas import ResponseEvent, ToolCallResponseEvent, TextResponseEvent, ToolResponseEvent, ToolErrorEvent
 from se_agents.system_prompt import build_system_prompt
 from se_agents.tools import OpenAIVisionTool, Tool, VisionBaseTool
 
@@ -276,7 +274,7 @@ class Agent:
 
     async def run_stream(
         self, user_input: str, image_urls: Optional[List[str]] = None
-    ) -> AsyncGenerator[ResponseEvent, None]:
+    ) -> AsyncGenerator[Union[ResponseEvent, TextResponseEvent, ToolCallResponseEvent, ToolResponseEvent, ToolErrorEvent], None]:
         """Process a user message and yield responses (assistant messages and tool results).
 
         This method handles the conversation loop, including tool calls and user interactions.
@@ -331,7 +329,7 @@ class Agent:
 
             # Normal response when not halted
             if not halted:
-                yield ResponseEvent(type="response", content=content)
+                yield TextResponseEvent.from_text(content)
                 continue
 
             # Accumulate after halt
@@ -340,7 +338,7 @@ class Agent:
 
             # Flush buffer if no tag detected within 5 tokens
             if tokens_since_halted > 5 and not tag_found:
-                yield ResponseEvent(type="response", content=halted_tokens)
+                yield TextResponseEvent.from_text(halted_tokens)
                 halted = False
                 tokens_since_halted = 0
                 halted_tokens = ""
@@ -363,7 +361,7 @@ class Agent:
                     if f"<{stream_param}>" in full_response and not check_set & {
                         content.strip()
                     }:
-                        yield ResponseEvent(type="response", content=content)
+                        yield TextResponseEvent.from_text(content)
                     if "</" in full_response:
                         tool_streaming = False
                 # print("----- Tag found -----")
@@ -379,19 +377,21 @@ class Agent:
                             )
                             break
                     if error_message:
-                        error_payload = error_message
-                        if raw_tool_xml:
-                            error_payload += f"\nRaw XML:\n{raw_tool_xml}"
-                        yield ResponseEvent(
-                            type="tool_error",
-                            content=f"<tool_error>\n{error_payload}\n</tool_error>\n",
-                        )
+                        yield ToolErrorEvent.from_error(error_message, raw_tool_xml, tool_name)
                         return
                     if raw_tool_xml:
                         tool_found = True
-                        yield ResponseEvent(
-                            type="tool_call", content=raw_tool_xml or ""
-                        )
+                        if tool_name and params:
+                            yield ToolCallResponseEvent.from_xml(tool_name, params, raw_tool_xml)
+                        else:
+                            # Fallback to old format if parsing failed but we have the XML
+                            yield ToolCallResponseEvent(
+                                type="tool_call",
+                                content=raw_tool_xml or "",
+                                tool_name=None,  # Unknown tool name
+                                parameters={},   # Empty parameters
+                                raw_content=raw_tool_xml or ""
+                            )
                         return
 
                 # Removed thinking block handling - will be handled as a normal tool call
@@ -401,16 +401,16 @@ class Agent:
 
         if tag_found and not tool_found:
             print("Stream ended with an unclosed tool call.")
-            yield ResponseEvent(
-                type="tool_error",
-                content=f"<tool_error>\nStream ended unexpectedly within a tool call. Closing tag not found. Incomplete XML:\n{halted_tokens}\n</tool_error>\n",
+            yield ToolErrorEvent.from_error(
+                "Stream ended unexpectedly within a tool call. Closing tag not found.",
+                halted_tokens
             )
         elif halted and not tool_found and not tag_found:
             # If we halted (saw '<') but never found a complete tag or ended inside one, yield the buffered content as response
             print("----- Stream ended after halting, flushing remaining buffer -----")
             print(halted_tokens)
             print("-------------------------------------------------------")
-            yield ResponseEvent(type="response", content=halted_tokens)
+            yield TextResponseEvent.from_text(halted_tokens)
 
         # Agent no longer appends assistant responses to its own history
 
