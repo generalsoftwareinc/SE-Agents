@@ -7,10 +7,9 @@ from dotenv import load_dotenv
 from se_agents.agent import Agent
 from se_agents.runner import Runner
 from se_agents.schemas import (
-    ResponseEvent,
     TextResponseEvent,
-    ToolCallResponseEvent, 
-    ToolResponseEvent, 
+    ToolCallResponseEvent,
+    ToolResponseEvent,
     ToolErrorEvent
 )
 from se_agents.tools import (  # Added FinalOutput import
@@ -30,8 +29,8 @@ load_dotenv(override=True)
 rules = """
 1. Your knowledge is limited to the information available up to April 2024.
 2. You must use your tools to access up-to-date information from the web and provide accurate information to aid the users research goals
-4. You must ALWAYS use your tools to verify the information you provide. If you are unsure about something, you must use your tools to find the answer.
-5. Write a well-formatted answer that's optimized for readability:
+3. You must ALWAYS use your tools to verify the information you provide. If you are unsure about something, you must use your tools to find the answer.
+4. Write a well-formatted answer that's optimized for readability:
    - Separate your answer into logical sections using level 2 headers (##) for sections and bolding (**) for subsections.
    - Incorporate a variety of lists, headers, and text to make the answer visually appealing.
    - Never start your answer with a header.
@@ -43,7 +42,7 @@ rules = """
    - Use markdown code blocks for code snippets, including the language for syntax highlighting.
    - Wrap all math expressions in LaTeX using double dollar signs ($$). For example: $$x^4 = x - 3$$
    - You may include quotes in markdown to supplement the answer
-6. Be concise in your answer. Skip any preamble and provide the answer directly
+5. Be concise in your answer. Skip any preamble and provide the answer directly
 
 """
 
@@ -131,11 +130,7 @@ async def main():
             # async for response in test_agent.run_stream(user_input):
             # Handle specialized event classes first
             if isinstance(response, TextResponseEvent):
-                print(
-                    response.content,
-                    end="",
-                    flush=True,
-                )
+                print(response.content, end="", flush=True)
             elif isinstance(response, ToolCallResponseEvent):
                 print(f"\n\n{GREEN}🟡 Tool call: {response.tool_name or 'unknown'}{RESET}")
                 if response.parameters:
@@ -148,7 +143,7 @@ async def main():
                     print(f"{RED}Tool: {response.tool_name}{RESET}")
                 if response.raw_xml:
                     print(f"{RED}Raw XML: {response.raw_xml}{RESET}\n")
-                print() # Extra newline for readability
+                print()   # Extra newline for readability
             # Fallback for backward compatibility
             elif hasattr(response, "type"):
                 if response.type == "response":

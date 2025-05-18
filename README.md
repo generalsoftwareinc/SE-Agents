@@ -144,20 +144,6 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-## Configuration
-
-The framework relies on environment variables for API keys and model configuration. Create a `.env` file in your project root or set them directly in your environment:
-
-| Variable            | Description                                  | Required | Default |
-|---------------------|----------------------------------------------|----------|---------|
-| `OPENROUTER_API_KEY`| API key for OpenRouter (or compatible API)   | Yes      | -       |
-| `OPENROUTER_MODEL`  | LLM model identifier (e.g., `openai/gpt-4o`) | Yes      | -       |
-| `OPENROUTER_BASE_URL`| (Optional) Custom API base URL             | No       | OpenAI default |
-| `EXA_API_KEY`       | (Optional) API key for Exa AI tools        | No       | -       |
-| `FIRECRAWL_API_KEY` | (Optional) API key for Firecrawl tools     | No       | -       |
-| `add_think_instructions` | (Optional) Boolean to include THINKING PROCESS instructions in the system prompt. | No | `False` |
-| `add_final_output_instructions` | (Optional) Boolean to include FINAL OUTPUT INSTRUCTIONS in the system prompt. | No | `False` |
-
 ## Core Concepts
 
 *   **`Agent`**: The core component responsible for:
