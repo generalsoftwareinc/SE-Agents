@@ -8,7 +8,7 @@
 *   **Streaming Responses**: Handles asynchronous streaming of LLM responses and tool events.
 *   **Customizable System Prompts**: Fine-tune agent behavior through configurable descriptions, rules, objectives, and instructions.
 *   **Context Management**: Automatically truncates conversation history to fit within token limits.
-*   **Clear Event Model**: Uses `ResponseEvent` schema for structured communication between `Agent` and `Runner`.
+*   **Clear Event Model**: Uses specialized event classes (`TextResponseEvent`, `ToolCallResponseEvent`, etc.) for structured communication between `Agent` and `Runner` with type-safe access to data.
 
 ## Installation & Requirements
 
@@ -172,9 +172,12 @@ The framework relies on environment variables for API keys and model configurati
     *   Handles `tool_call` events by executing the corresponding tool via `Agent._execute_tool`.
     *   Feeds `tool_response` or `tool_error` back into the `Agent` for the next LLM turn.
     *   Yields `ResponseEvent` objects to the caller. Can optionally enforce the use of the `FinalOutput` tool via the `enforce_final` constructor argument.
-*   **`ResponseEvent`**: A Pydantic model defining the structure of events yielded by the `Runner`:
-    *   `type`: "response", "tool_call", "tool_response", "tool_error" (Note: "thinking" is handled as a standard tool call/response).
-    *   `content`: The associated text or XML payload.
+*   **`ResponseEvent`**: Base Pydantic model for events yielded by the `Runner`. Several specialized subclasses provide type-safe access to specific data:
+    *   `TextResponseEvent`: For regular text responses from the agent.
+    *   `ToolCallResponseEvent`: For tool calls with structured JSON parameters instead of XML.
+    *   `ToolResponseEvent`: For tool execution results with direct access to result content.
+    *   `ToolErrorEvent`: For error messages with detailed error information.
+    *   All classes maintain the `type` and `content` fields for backward compatibility.
 *   **`Tool`**: Base class for all tools. Subclasses implement specific functionalities (e.g., web search, page crawl, thinking, final output) and define their `name`, `description`, and `parameters`.
 
 ## Built-in Tools
@@ -250,7 +253,7 @@ Based on initial TODOs:
 - [x] Refactor block \<thinking> and event handling as a tool (`ThinkTool`), following the pattern described by the [Anthropic documentation](https://www.anthropic.com/engineering/claude-think-tool).
 - [x] Remove the <tool_call> block parsing from the Agent, instead parse the tool call xml using the <tool_name> as top level tag. This required changes to the `Agent` and its prompts.
 - [x] Yield chunks of the <tool_call> block as they are streamed, instead of yielding the whole block at once when it detects the end of the block. This would be useful for streaming thinking and final-output instead of waiting for the whole block to be parsed, improving the user experience. `Agent` class should yield all chunks of the <tool_call> block as they are streamed, but the `Runner` should only yield to clients the chunks corresponding to `ThinkTool` and `FinalOutput` calls, all other calls should be yielded as a whole after the whole block is parsed.
-- [ ] Migrate tool call ResponseEvent to a JSON based schema, instead of returning the content of the tool_call as a str containing XML, return a valid python dict with the function parameters. This can be achieved by creating a child class ToolCallResponseEvent that extends ResponseEvent.
+- [x] Migrate tool call ResponseEvent to a JSON based schema, instead of returning the content of the tool_call as a str containing XML, return a valid python dict with the function parameters. This can be achieved by creating a child class ToolCallResponseEvent that extends ResponseEvent.
 - [ ] Create a way to differentiate between the streaming response of tools and the llm output. This would allow the `Runner` to yield these tool responses even when enforce_final is enabled, while silencing the llm response.
 
 
