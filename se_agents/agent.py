@@ -1,12 +1,19 @@
 import inspect
 import re
-import asyncer
 import xml.etree.ElementTree as ET
+from pprint import pprint
 from typing import AsyncGenerator, Dict, List, Optional, Union
 
+import asyncer
 from openai import AsyncOpenAI
 
-from se_agents.schemas import ResponseEvent, ToolCallResponseEvent, TextResponseEvent, ToolResponseEvent, ToolErrorEvent
+from se_agents.schemas import (
+    ResponseEvent,
+    TextResponseEvent,
+    ToolCallResponseEvent,
+    ToolErrorEvent,
+    ToolResponseEvent,
+)
 from se_agents.system_prompt import build_system_prompt
 from se_agents.tools import OpenAIVisionTool, Tool, VisionBaseTool
 
@@ -274,7 +281,16 @@ class Agent:
 
     async def run_stream(
         self, user_input: str, image_urls: Optional[List[str]] = None
-    ) -> AsyncGenerator[Union[ResponseEvent, TextResponseEvent, ToolCallResponseEvent, ToolResponseEvent, ToolErrorEvent], None]:
+    ) -> AsyncGenerator[
+        Union[
+            ResponseEvent,
+            TextResponseEvent,
+            ToolCallResponseEvent,
+            ToolResponseEvent,
+            ToolErrorEvent,
+        ],
+        None,
+    ]:
         """Process a user message and yield responses (assistant messages and tool results).
 
         This method handles the conversation loop, including tool calls and user interactions.
@@ -377,20 +393,24 @@ class Agent:
                             )
                             break
                     if error_message:
-                        yield ToolErrorEvent.from_error(error_message, raw_tool_xml, tool_name)
+                        yield ToolErrorEvent.from_error(
+                            error_message, raw_tool_xml, tool_name
+                        )
                         return
                     if raw_tool_xml:
                         tool_found = True
                         if tool_name and params:
-                            yield ToolCallResponseEvent.from_xml(tool_name, params, raw_tool_xml)
+                            yield ToolCallResponseEvent.from_xml(
+                                tool_name, params, raw_tool_xml
+                            )
                         else:
                             # Fallback to old format if parsing failed but we have the XML
                             yield ToolCallResponseEvent(
                                 type="tool_call",
                                 content=raw_tool_xml or "",
                                 tool_name=None,  # Unknown tool name
-                                parameters={},   # Empty parameters
-                                raw_content=raw_tool_xml or ""
+                                parameters={},  # Empty parameters
+                                raw_content=raw_tool_xml or "",
                             )
                         return
 
@@ -398,12 +418,13 @@ class Agent:
 
         # --- After the stream loop finishes ---
         print(f"Stream finished. Final accumulated content: {full_response}")
+        self.messages.append({"role": "assistant", "content": full_response})
 
         if tag_found and not tool_found:
             print("Stream ended with an unclosed tool call.")
             yield ToolErrorEvent.from_error(
                 "Stream ended unexpectedly within a tool call. Closing tag not found.",
-                halted_tokens
+                halted_tokens,
             )
         elif halted and not tool_found and not tag_found:
             # If we halted (saw '<') but never found a complete tag or ended inside one, yield the buffered content as response

@@ -9,17 +9,13 @@ from se_agents.runner import Runner
 from se_agents.schemas import (
     TextResponseEvent,
     ToolCallResponseEvent,
+    ToolErrorEvent,
     ToolResponseEvent,
-    ToolErrorEvent
 )
-from se_agents.tools import (  # Added FinalOutput import
+from se_agents.tools import (  # Added FinalOutput import; FireCrawlFetchPage,; MockNumberTool,; OpenAIVisionTool,
     ExaCrawl,
     ExaSearch,
-    ExaSearchHighlights,
     FinalOutput,
-    # FireCrawlFetchPage,
-    # MockNumberTool,
-    # OpenAIVisionTool,
     ThinkTool,
 )
 
@@ -27,23 +23,7 @@ load_dotenv(override=True)
 
 
 rules = """
-1. Your knowledge is limited to the information available up to April 2024.
-2. You must use your tools to access up-to-date information from the web and provide accurate information to aid the users research goals
-3. You must ALWAYS use your tools to verify the information you provide. If you are unsure about something, you must use your tools to find the answer.
-4. Write a well-formatted answer that's optimized for readability:
-   - Separate your answer into logical sections using level 2 headers (##) for sections and bolding (**) for subsections.
-   - Incorporate a variety of lists, headers, and text to make the answer visually appealing.
-   - Never start your answer with a header.
-   - Use lists, bullet points, and other enumeration devices only sparingly, preferring other formatting methods like headers. Only use lists when there is a clear enumeration to be made
-   - Only use numbered lists when you need to rank items. Otherwise, use bullet points.
-   - Never nest lists or mix ordered and unordered lists.
-   - When comparing items, use a markdown table instead of a list.
-   - Bold specific words for emphasis.
-   - Use markdown code blocks for code snippets, including the language for syntax highlighting.
-   - Wrap all math expressions in LaTeX using double dollar signs ($$). For example: $$x^4 = x - 3$$
-   - You may include quotes in markdown to supplement the answer
-5. Be concise in your answer. Skip any preamble and provide the answer directly
-
+1. You are a hepful assistant
 """
 
 
@@ -85,11 +65,10 @@ async def main():
         model=model,
         tools=[
             ExaSearch(exa_key),
-            ExaSearchHighlights(exa_key),
             ExaCrawl(exa_key),
             # FireCrawlFetchPage(firecrawl_key),
-            FinalOutput(),
-            ThinkTool(),
+            # FinalOutput(),
+            # ThinkTool(),
             # OpenAIVisionTool(),
         ],  # Added FinalOutput() instance
         # initial_messages=[
@@ -103,12 +82,13 @@ async def main():
         verbose=True,
         rules=rules,
         add_default_rules=False,
-        add_think_instructions=True,
-        add_final_output_instructions=True,
+        # add_think_instructions=True,
+        # add_final_output_instructions=True,
     )
 
     # Reusing the original loop structure for the test agent
-    runner = Runner(agent, enforce_final=True)  # Enable final output enforcement
+    # runner = Runner(agent, enforce_final=True)  # Enable final output enforcement
+    runner = Runner(agent, enforce_final=False)
     print("🤖 Starting agent loop (with final output enforcement)...")
     print("Type 'exit' to end the conversation\n")
 
@@ -132,18 +112,22 @@ async def main():
             if isinstance(response, TextResponseEvent):
                 print(response.content, end="", flush=True)
             elif isinstance(response, ToolCallResponseEvent):
-                print(f"\n\n{GREEN}🟡 Tool call: {response.tool_name or 'unknown'}{RESET}")
+                print(
+                    f"\n\n{GREEN}🟡 Tool call: {response.tool_name or 'unknown'}{RESET}"
+                )
                 if response.parameters:
                     print(f"{GREEN}Parameters: {response.parameters}{RESET}\n")
             elif isinstance(response, ToolResponseEvent):
-                print(f"\n\n{BLUE}🟢 Tool response for {response.tool_name or 'unknown tool'}:\n{response.result}{RESET}\n")
+                print(
+                    f"\n\n{BLUE}🟢 Tool response for {response.tool_name or 'unknown tool'}:\n{response.result}{RESET}\n"
+                )
             elif isinstance(response, ToolErrorEvent):
                 print(f"\n\n{RED}🔴 Tool error: {response.error_message}{RESET}")
                 if response.tool_name:
                     print(f"{RED}Tool: {response.tool_name}{RESET}")
                 if response.raw_xml:
                     print(f"{RED}Raw XML: {response.raw_xml}{RESET}\n")
-                print()   # Extra newline for readability
+                print()  # Extra newline for readability
             # Fallback for backward compatibility
             elif hasattr(response, "type"):
                 if response.type == "response":
@@ -155,7 +139,9 @@ async def main():
                 elif response.type == "tool_error":
                     print(f"\n\n{RED}🔴 Tool error:\n{response.content}{RESET}\n")
                 else:
-                    print(f"\n\nUnknown event type: {response.type}\nContent: {response.content}\n")
+                    print(
+                        f"\n\nUnknown event type: {response.type}\nContent: {response.content}\n"
+                    )
             else:
                 print(f"\n\nUnknown response format: {response}\n")
 

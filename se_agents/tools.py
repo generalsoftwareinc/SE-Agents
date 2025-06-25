@@ -1,8 +1,8 @@
-from abc import abstractmethod
-import time
-from typing import List
 import base64
+import time
+from abc import abstractmethod
 from pathlib import Path
+from typing import List
 
 from dotenv import load_dotenv
 from duckduckgo_search import DDGS
@@ -61,7 +61,7 @@ class Tool:
 
         return processed_parameters
 
-    def _convert_to_list(self, value) -> List[str]:
+    def _convert_to_list(self, value) -> List[str] | None:
         """
         Convert input to a list of strings.
 
@@ -73,11 +73,13 @@ class Tool:
             value (str or list of str): Input to convert.
 
         Returns:
-            List[str]: List of strings.
+            List[str] | None: List of strings, or None if input is an empty string or empty list.
 
         Raises:
             ValueError: If input is not a string or a list of strings.
         """
+        if value == "" or (isinstance(value, list) and len(value) == 0):
+            return None
         if isinstance(value, str):
             return [d.strip() for d in value.split(",")]
         elif isinstance(value, list) and all(isinstance(d, str) for d in value):
@@ -161,7 +163,7 @@ class FireCrawlFetchPage(Tool):
             return f"Error fetching page: {e}"
 
 
-class ExaSearchBase(Tool):
+class ExaSearch(Tool):
     def __init__(self, api_key: str):
         super().__init__(
             name="web_search",
@@ -175,11 +177,6 @@ class ExaSearchBase(Tool):
                 "include_domains": {
                     "type": "List[string]",
                     "description": "List of comma-separated domains to include in the search.",
-                    "required": False,
-                },
-                "exclude_domains": {
-                    "type": "List[string]",
-                    "description": "List of comma-separated domains to exclude from the search.",
                     "required": False,
                 },
                 "start_published_date": {
@@ -197,15 +194,12 @@ class ExaSearchBase(Tool):
 
         self.client = Exa(api_key=api_key)
 
-
-class ExaSearch(ExaSearchBase):
     def execute(self, **kwargs) -> str:
         params = self._process_parameters(**kwargs)
         query = params.get("query")
         include_domains = params.get("include_domains")
-        exclude_domains = params.get("exclude_domains")
-        start_published_date = params.get("start_published_date")
-        end_published_date = params.get("end_published_date")
+        start_published_date = params.get("start_published_date") or None
+        end_published_date = params.get("end_published_date") or None
 
         results = []
         separator = "\n==============================================================================\n"
@@ -214,13 +208,12 @@ class ExaSearch(ExaSearchBase):
 
         while True:
             try:
-                search_results = self.client.search(
-                    query=query,
-                    num_results=10,
+                search_results = self.client.search_and_contents(
+                    query,
                     include_domains=include_domains,
-                    exclude_domains=exclude_domains,
                     start_published_date=start_published_date,
                     end_published_date=end_published_date,
+                    summary=True,
                 ).results
                 break
             except ValueError as e:
@@ -249,7 +242,9 @@ class ExaSearch(ExaSearchBase):
         if search_results is not None:
             try:
                 for r in search_results:
-                    results.append(f"- {r.title}\n  URL: {r.url}")
+                    results.append(
+                        f"- {r.title}\n  URL: {r.url}\n  Summary: {r.summary}"
+                    )
                 return f"Search results:{separator}" + separator.join(results)
             except Exception as e:
                 raise Exception(f"Error processing search results: {e}")
@@ -323,128 +318,6 @@ class ExaCrawl(Tool):
             return content
         else:
             return "Error: Failed to fetch page content after handling exceptions."
-
-
-class ExaSearchHighlights(ExaSearchBase):
-    def execute(self, **kwargs) -> str:
-        params = self._process_parameters(**kwargs)
-        query = params.get("query")
-        include_domains = params.get("include_domains")
-        exclude_domains = params.get("exclude_domains")
-        start_published_date = params.get("start_published_date")
-        end_published_date = params.get("end_published_date")
-
-        results = []
-        separator = "\n==============================================================================\n"
-
-        while True:
-            try:
-                search_results = self.client.search_and_contents(
-                    query=query,
-                    num_results=10,
-                    include_domains=include_domains,
-                    exclude_domains=exclude_domains,
-                    start_published_date=start_published_date,
-                    end_published_date=end_published_date,
-                    highlights=True,
-                ).results
-                break
-            except ValueError as e:
-                msg = ""
-                if e.args:
-                    msg = str(e.args[0])
-                status_code = getattr(e, "response", None) and getattr(
-                    e.response, "status_code", None
-                )
-                if status_code == 429 or "429" in msg:
-                    print("Rate limit exceeded (429). Retrying after 1 second...")
-                    time.sleep(1)
-                    continue
-                else:
-                    text = getattr(e, "response", None) and getattr(
-                        e.response, "text", str(e)
-                    )
-                    return f"Error during search: {status_code or 'N/A'} - {text}"
-            except Exception as e:
-                return f"An unexpected error occurred during search: {e}"
-
-        if search_results:
-            try:
-                for r in search_results:
-                    highlights = (
-                        "\n  ".join(r.highlights)
-                        if r.highlights
-                        else "No highlights available"
-                    )
-                    results.append(
-                        f"- {r.title}\n  URL: {r.url}\n  Highlights:\n  {highlights}"
-                    )
-                return f"Search highlights:{separator}" + separator.join(results)
-            except Exception as e:
-                return f"Error processing search results: {e}"
-        else:
-            return "No results found for the search query."
-
-
-class ExaSearchContent(ExaSearchBase):
-
-    def execute(self, **kwargs) -> str:
-        params = self._process_parameters(**kwargs)
-        query = params.get("query")
-        include_domains = params.get("include_domains")
-        exclude_domains = params.get("exclude_domains")
-        start_published_date = params.get("start_published_date")
-        end_published_date = params.get("end_published_date")
-
-        results = []
-        separator = "\n==============================================================================\n"
-        search_results = None
-
-        while True:
-            try:
-                search_results = self.client.search_and_contents(
-                    query=query,
-                    num_results=10,
-                    include_domains=include_domains,
-                    exclude_domains=exclude_domains,
-                    start_published_date=start_published_date,
-                    end_published_date=end_published_date,
-                ).results
-                break
-            except ValueError as e:
-                msg = ""
-                if e.args:
-                    msg = str(e.args[0])
-                status_code = getattr(e, "response", None) and getattr(
-                    e.response, "status_code", None
-                )
-                if status_code == 429 or "429" in msg:
-                    print(
-                        "Rate limit exceeded (429) for search_and_contents. Retrying after 1 second..."
-                    )
-                    time.sleep(1)
-                    continue
-                else:
-                    text = getattr(e, "response", None) and getattr(
-                        e.response, "text", str(e)
-                    )
-                    raise Exception(
-                        f"Error during search_and_contents: {status_code or 'N/A'} - {text}"
-                    )
-            except Exception as e:
-                raise Exception(
-                    f"An unexpected error occurred during search_and_contents: {e}"
-                )
-
-        if search_results is not None:
-            try:
-                for r in search_results:
-                    results.append(f"- {r.title}\n  URL: {r.url}\n  Body: {r.text}")
-                return f"Search results:{separator}" + separator.join(results)
-            except Exception as e:
-                raise Exception(f"Error processing search_and_contents results: {e}")
-        else:
-            return "Error: Search failed to return results after handling exceptions."
 
 
 class MockNumberTool(Tool):
