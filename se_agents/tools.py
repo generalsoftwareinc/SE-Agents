@@ -166,7 +166,7 @@ class FireCrawlFetchPage(Tool):
 class ExaSearch(Tool):
     def __init__(self, api_key: str):
         super().__init__(
-            name="web_search",
+            name="web_search_tool",
             description="Search the web using Exa AI - performs real-time web searches and can scrape content from specific URLs. Supports configurable result counts and returns the content from the most relevant websites.",
             parameters={
                 "query": {
@@ -255,7 +255,7 @@ class ExaSearch(Tool):
 class ExaCrawl(Tool):
     def __init__(self, api_key: str):
         super().__init__(
-            name="crawl",
+            name="crawl_tool",
             description="Extract content from specific URLs using Exa AI - performs targeted crawling of web pages to retrieve their full content. Useful for reading articles, PDFs, or any web page when you have the exact URL. Returns the complete text content of the specified URL.",
             parameters={
                 "url": {
@@ -375,7 +375,7 @@ class MockIntTool(Tool):
 class ThinkTool(Tool):
     def __init__(self):
         super().__init__(
-            name="think",
+            name="think_tool",
             description="Use the tool to think about something. It will not obtain new information or change the database, but just append the thought to the log. Use it when complex reasoning or some cache memory is needed.",
             parameters={
                 "thought": {
@@ -443,7 +443,7 @@ class VisionBaseTool(Tool):
 
 class OpenAIVisionTool(VisionBaseTool):
     def __init__(self):
-        super().__init__("openai_vision")
+        super().__init__("openai_vision_tool")
         self._accepted_formats = [".png", ".jpg", ".jpeg", ".webp", ".gif"]
 
     def encode_image(self, image_path):
@@ -502,7 +502,7 @@ class OpenAIVisionTool(VisionBaseTool):
 class FinalOutput(Tool):
     def __init__(self):
         super().__init__(
-            name="final_output",
+            name="final_output_tool",
             description="Use this tool **only** to conclude **your current response cycle**, **after** all other necessary actions (like thinking or using other tools) for **this step** are complete. Provide your complete final response or summary of work done for **this step** in the 'result' parameter. This is required even for simple conversational replies where no other tools were needed.",
             parameters={
                 "result": {
