@@ -408,7 +408,7 @@ class Agent:
                             yield ToolCallResponseEvent(
                                 type="tool_call",
                                 content=raw_tool_xml or "",
-                                tool_name=None,  # Unknown tool name
+                                tool_name="",  # Unknown tool name
                                 parameters={},  # Empty parameters
                                 raw_content=raw_tool_xml or "",
                             )
