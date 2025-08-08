@@ -404,11 +404,11 @@ class Agent:
                                 tool_name, params, raw_tool_xml
                             )
                         else:
-                            # Fallback to old format if parsing failed but we have the XML
+                            # Fallback to old format if parsing failed or the tool does not require any parameters
                             yield ToolCallResponseEvent(
                                 type="tool_call",
                                 content=raw_tool_xml or "",
-                                tool_name="",  # Unknown tool name
+                                tool_name=tool_name if tool_name else "",
                                 parameters={},  # Empty parameters
                                 raw_content=raw_tool_xml or "",
                             )
