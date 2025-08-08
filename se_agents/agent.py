@@ -319,9 +319,14 @@ class Agent:
 
         # first message input is not handled by Runner
         self._truncate_context_window()
-        response = await self.client.chat.completions.create(
-            model=self.model, messages=self.messages, stream=True
-        )
+        if self.model.startswith("gpt-5"):
+            response = await self.client.chat.completions.create(
+                model=self.model, messages=self.messages, stream=True,reasoning_effort="minimal"
+            )
+        else:
+            response = await self.client.chat.completions.create(
+                model=self.model, messages=self.messages, stream=True
+            )
 
         full_response = ""
         tool_name = None
