@@ -4,12 +4,10 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import List
 
-from dotenv import load_dotenv
 from duckduckgo_search import DDGS
 from exa_py import Exa
 from firecrawl import FirecrawlApp
 from openai import Client
-from requests import HTTPError
 
 
 class Tool:
