@@ -2,7 +2,7 @@
 
 ## Main Findings
 
-- grok-3-mini: Very fast, cheap and reliable. It's too polite and and the response style is very verbose. Is a reasoning model so there is an initial latency hit, but its small due to the speed of the model. Best small model so far, only issue is response style. 
+- grok-3-mini: Very fast, cheap and reliable. It's too polite and and the response style is very verbose. Is a reasoning model so there is an initial latency hit, but its small due to the speed of the model. Best small model so far, only issue is response style.
 - grok-3: Fast, reliable, very expensive. Its good using our tool format. Responses are verbose but personality and style is ok. Not a reasoning model so there is no initial latency hit.
 - minimax-m1: Very slow, good pricing (cheaper than Gemini Flash and GPT-4.1-mini), open-source, very reliable. It's compatible with our tool format. Responses are a bit verbose. Is a reasoning model and latency hit is very noticeable.
 - deepseek-r1(latest): Very slow, good pricing, open-source. It has minor issues with the tool call format. It's very smart. Speed can be improved by sacrificing pricing. Latency hit due to reasoning.
@@ -10,12 +10,14 @@
 - gpt-4.1: Fast, high-end pricing, reliable. It's good using our tool format. No latency hit. It asks for authorization on every tool call and refuses to use multiple tools in sequence autonomously.
 - qwen3-32b: Medium speed, good pricing even in nitro endpoint. It's not good at using our tool format. Latency hit due to reasoning. Doesn't show strong agentic behavior (does not call multiple tools in sequence autonomously and likes to finish tasks early).
 - qwen3-235b-a22b: Slow, good pricing, open-source. Presents minor inconsistencies when using our tool calling format. Very big latency hit due to reasoning. Very similar to deepseek-r1(latest) but slower and worse agentic behavior.
+- qwen3-235b-a22b-2507: Fast, good pricing, open-source. Gets confused on what should be his answer and what is the tool message, making it completely incompatible with our tool format.
 - llama-3.3-nemotron-super-49b-v1: Fast, good pricing, open-source. Bad with our tool format. Very eager agentic behavior but needs specific instructions and optimization. No latency hit. Limited intelligence compared to similar price competitors.
 - magistral-small-2506: Fast, average pricing. Bad with out tool calling format. Weird formatting issues in the responses. Latency hit due to reasoning.
 - mistral-small-3.2: Fast, good princing. Bad with our tool format. Weird formatting issues in the responses. No latency hit. Promising agentic behavior for the price.
 - gemini-2.5-flash: Very Fast, good pricing, reliable. Compatible with our tool calling format. No latency hit. Agentic behavior is not the most advanced, but is realiable.
 - gemini-2.5-pro: Fast, high-end pricing, reliable. Compatible with our tool calling format. Latency hit due to reasoning, but small thanks to the speed. Very smart model and reliable agentic behavior.
 - o4-mini(medium): Medium speed, middle range pricing, reliable. It's good using our tool format. Latency hit due to reasoning. Agentic behavior is poor as it requires approval and nogging to call multiple tools in sequence, similar to gpt-4.1.
+- kimi-k2: Fast, good pricing, reliable. Generally compatible with our tool calling format but shows occasional inconsistencies (switches between correct XML format and generic `<tool_use>` tags). Strong autonomous agentic behavior with excellent multi-step reasoning.
 
 ## Usage Recommendations
 
@@ -39,6 +41,7 @@ These models are ideal for tasks where speed and cost-effectiveness are prioriti
 
 For scenarios where using open-source models is a priority and performance can be compromised.
 
+- **kimi-k2**: The best open-source option for agents. It's fast and has strong agentic behavior. It's not as reliable as paid models in tier 1 and 2.
 - **deepseek-r1(latest)**: The smartest open-source option. It's slow and has minor tool-calling issues, but its intelligence is top-tier. A good choice for offline, complex problem-solving.
 - **minimax-m1**: A very reliable and cost-effective open-source model. Its main drawback is the very slow speed and noticeable latency hit.
 
